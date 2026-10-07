@@ -44,6 +44,13 @@ if (dataBase) {
     `<head><meta name="ccreplay-data-base" content="${url.href.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}">`,
   );
 }
+// Prevent browsers from pairing new HTML/data configuration with cached code.
+const revision = process.env.GITHUB_SHA;
+if (revision && /^[a-f0-9]{40}$/.test(revision)) {
+  html = html
+    .replace('./app.js"', `./app.js?v=${revision}"`)
+    .replace('./app.css"', `./app.css?v=${revision}"`);
+}
 await writeFile("dist/index.html", html);
 await writeFile("dist/.nojekyll", "");
 await mkdir("dist/recorder", { recursive: true });
