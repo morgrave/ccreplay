@@ -18,6 +18,8 @@ npm run dev
 2. `main` 또는 `master` 브랜치에 푸시합니다. 테스트 → 라이브러리 무결성 검사 → 빌드 → Pages 배포가 자동 실행됩니다.
 3. 이후 코드나 `public/library` 변경을 푸시하면 다시 배포됩니다. Actions의 수동 실행도 지원합니다.
 
+Pages에는 앱과 기록기만 배포합니다. 목록·에피소드·공용 자산·미리보기는 `https://raw.githubusercontent.com/<owner>/<repo>/<배포 커밋>/public/`에서 직접 읽습니다. Actions가 `CCREPLAY_DATA_BASE`를 설정하며, 커밋 주소에 고정해 목록과 자산의 버전이 섞이지 않게 합니다. `dist`에는 라이브러리나 미리보기 기록을 복사하지 않습니다. 로컬 서버에서는 `public`의 데이터를 직접 제공합니다.
+
 기본 브랜치 이름이 다르면 workflow의 `branches: [main, master]`을 수정하세요. 별도 PAT/배포 비밀키는 필요하지 않습니다. 자동 배포에는 GitHub의 기본 `GITHUB_TOKEN`과 Pages OIDC를 사용합니다. 저장소 하위 경로(`https://user.github.io/repository/`)에서도 작동하도록 파일 경로는 상대 경로, 화면 탐색은 URL hash를 사용합니다. [GitHub 공식 설정 안내](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
 
 ## 캠페인과 에피소드 등록
@@ -54,7 +56,7 @@ public/library/
 - 등록 묶음은 추가 항목만 담습니다. 오래된 캠페인 목록에서 만든 묶음도 최신 목록과 병합하고, 같은 묶음을 다시 적용해도 회차를 중복 생성하지 않습니다. 기존 자산을 자동 삭제하지 않습니다.
 - 기록기는 기존처럼 독립적으로 열 수 있는 완전한 `.ccreplay`를 내보냅니다. **저장소에 등록하는 단계에서** 자산을 분리하므로 그 원본 파일을 저장소에 함께 커밋할 필요는 없습니다. 재생기의 저장 버튼은 다시 자산 포함 독립 파일로 내보냅니다.
 - 얇은 회차는 `assetStorage: "sha256-chunks-v1"`을 명시합니다. 해당 회차를 단독으로 열면 공용 자산이 필요하다는 안내를 표시합니다. 기존 v1 전체 파일도 계속 지원합니다.
-- GitHub Pages는 배포 사이트 전체가 1 GB로 제한됩니다. 앱 공간을 남기기 위해 라이브러리를 950 MiB 이하로 검사합니다.  [Pages 제한](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)
+- 라이브러리는 Git 저장소에 보관하고 Raw URL에서 읽으므로 Pages 배포 용량에 포함되지 않습니다. 자산 조각은 20 MiB, 에피소드 기록 파일은 95 MiB 이하이며, 한 회차를 열 때의 자산 합계는 1 GiB 이하로 제한합니다.
 
 공개 GitHub Pages에 게시하는 기록은 방문자가 내려받을 수 있습니다. 사이트의 재생/등록 화면에는 비밀키나 GitHub 토큰을 입력하지 않습니다.
 

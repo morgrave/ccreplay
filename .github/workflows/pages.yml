@@ -28,6 +28,9 @@ jobs:
       - run: npm test
       - run: npm run library:check
       - run: npm run build
+        env:
+          # Pin catalog, episodes and assets to the same revision as the app.
+          CCREPLAY_DATA_BASE: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/public/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

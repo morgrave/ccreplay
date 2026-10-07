@@ -1,4 +1,5 @@
 import { errorMessage } from "./core/errors.ts";
+import { dataURL } from "./core/data-source.ts";
 import type { Recording, PreparedEpisode } from "./core/types.ts";
 import { $, ic, paintIcons } from "./shell.ts";
 import { escapeHTML as esc, timeLabel } from "./core/model.ts";
@@ -27,7 +28,7 @@ export function mountLibrary({
   showRecord: () => void;
   openFile: () => void;
 }) {
-  const base = new URL("./library/", location.href.split("#")[0]);
+  const base = dataURL("library/");
   let catalog = emptyCatalog(),
     campaign: string | null = null,
     pending: boolean | null = null,

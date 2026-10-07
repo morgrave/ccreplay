@@ -1,4 +1,5 @@
 import { registerReplayTools } from "./replay/tools.ts";
+import { dataURL } from "./core/data-source.ts";
 import type { RoomEvent } from "./replay/types.ts";
 import type { eventWithTime } from "@rrweb/types";
 import { errorMessage } from "./core/errors.ts";
@@ -947,7 +948,7 @@ initial.events = [];
 initial.assets = [];
 load({ data: initial, assets: new Map(), release() {} }, false);
 
-fetch("./welcome.ccreplay")
+fetch(dataURL("welcome.ccreplay"))
   .then((r) => r.blob())
   .then((blob) => readArchive(new File([blob], "welcome.ccreplay")))
   .then((recording) => {

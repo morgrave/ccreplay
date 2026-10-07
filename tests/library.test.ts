@@ -102,3 +102,35 @@ test("shared asset loader validates each part and complete file, preserving Page
     globalThis.fetch = original;
   }
 });
+
+test("shared assets use decoded body size rather than compressed transfer length", async () => {
+  const bytes = new TextEncoder().encode("asset");
+  const hash = await hashBytes(bytes);
+  const asset = {
+    sha256: hash,
+    size: bytes.length,
+    parts: [{ hash, size: bytes.length }],
+  };
+  const original = globalThis.fetch;
+  try {
+    // Browser Fetch exposes the decoded body while retaining wire headers.
+    globalThis.fetch = async () =>
+      new Response(bytes, {
+        headers: { "content-encoding": "gzip", "content-length": "25" },
+      });
+    assert.deepEqual(
+      await libraryAssetLoader("https://user.github.io/repo/library/")(asset),
+      bytes,
+    );
+    globalThis.fetch = async () =>
+      new Response("asset-too-large", {
+        headers: { "content-encoding": "gzip", "content-length": "3" },
+      });
+    await assert.rejects(
+      () => libraryAssetLoader("https://user.github.io/repo/library/")(asset),
+      /파일 크기가 한도를 넘습니다/,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});

@@ -12,7 +12,6 @@ import { strToU8 } from "fflate";
 import { compress } from "./compression.ts";
 import { makeArchive, readArchive } from "./archive.ts";
 export const CHUNK_SIZE = 20 * 1024 * 1024;
-export const SITE_BUDGET = 950 * 1024 * 1024;
 const hashPattern = /^[a-f0-9]{64}$/;
 const idPattern = /^[a-zA-Z0-9_-]{1,80}$/;
 export const hashBytes = async (bytes: Uint8Array<ArrayBuffer>) =>
@@ -213,15 +212,6 @@ export function mergePatch(catalog: Catalog, patch: LibraryPatch) {
   );
   next.revision = crypto.randomUUID();
   validateCatalog(next);
-  const bytes =
-    Object.values(next.objects).reduce((a, b) => a + b, 0) +
-    next.campaigns
-      .flatMap((c) => c.episodes)
-      .reduce((a, e) => a + (e.bytes || 0), 0);
-  if (bytes > SITE_BUDGET)
-    throw Error(
-      "라이브러리가 950 MiB를 넘습니다. GitHub Pages의 사이트 크기 한도 때문에 별도 자산 호스팅이 필요합니다.",
-    );
   return next;
 }
 export async function patchBlob(prepared: PreparedEpisode) {
@@ -242,8 +232,9 @@ export async function unpackPatch(bytes: Uint8Array<ArrayBuffer>) {
   return { patch, files };
 }
 async function responseBytes(r: Response, limit: number) {
-  const length = Number(r.headers.get("content-length"));
-  if (length > limit) throw Error("파일 크기가 한도를 넘습니다.");
+  // Fetch decodes Content-Encoding before exposing the body. Content-Length
+  // describes the encoded transfer, which may be larger than a small asset.
+  // Enforce the limit on decoded stream bytes instead.
   const reader = r.body!.getReader(),
     chunks = [];
   let size = 0;

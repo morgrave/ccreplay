@@ -5,7 +5,6 @@ import {
   readFile,
   writeFile,
   readdir,
-  stat,
   rm,
 } from "node:fs/promises";
 import { zipSync } from "fflate";
@@ -29,18 +28,23 @@ await build({
   outfile: "dist/archive-worker.js",
   minify: true,
 });
-await copyFile("index.html", "dist/index.html");
-await copyFile("public/welcome.ccreplay", "dist/welcome.ccreplay");
-async function copyTree(from: string, to: string) {
-  await mkdir(to, { recursive: true });
-  for (const name of await readdir(from)) {
-    const src = from + "/" + name,
-      dest = to + "/" + name;
-    if ((await stat(src)).isDirectory()) await copyTree(src, dest);
-    else await copyFile(src, dest);
-  }
+let html = await readFile("index.html", "utf8");
+const dataBase = process.env.CCREPLAY_DATA_BASE;
+if (dataBase) {
+  const url = new URL(dataBase);
+  if (
+    url.origin !== "https://raw.githubusercontent.com" ||
+    !url.pathname.endsWith("/")
+  )
+    throw Error(
+      "CCREPLAY_DATA_BASE must be a raw.githubusercontent.com directory URL",
+    );
+  html = html.replace(
+    "<head>",
+    `<head><meta name="ccreplay-data-base" content="${url.href.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}">`,
+  );
 }
-await copyTree("public/library", "dist/library");
+await writeFile("dist/index.html", html);
 await writeFile("dist/.nojekyll", "");
 await mkdir("dist/recorder", { recursive: true });
 for (const f of ["manifest.json", "popup.html", "popup.css", "offscreen.html"])

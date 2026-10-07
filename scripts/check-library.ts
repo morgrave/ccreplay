@@ -1,12 +1,7 @@
 import { readFile, readdir, lstat } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { unzipSync, strFromU8 } from "fflate";
-import {
-  validateCatalog,
-  hashBytes,
-  SITE_BUDGET,
-  CHUNK_SIZE,
-} from "../src/core/library.ts";
+import { validateCatalog, hashBytes, CHUNK_SIZE } from "../src/core/library.ts";
 import { validateRecording } from "../src/core/model.ts";
 const root = resolve(process.argv[2] || "public/library");
 const index = validateCatalog(
@@ -68,8 +63,6 @@ async function count(dir: string) {
   }
 }
 await count(root);
-if (total > SITE_BUDGET)
-  throw Error("라이브러리 용량이 GitHub Pages 예산을 초과했습니다.");
 console.log(
   `Library OK: ${index.campaigns.length} campaigns, ${index.campaigns.flatMap((c) => c.episodes).length} episodes, ${index.objects ? Object.keys(index.objects).length : 0} shared objects, ${(total / 1024 / 1024).toFixed(2)} MiB`,
 );
