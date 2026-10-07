@@ -1,0 +1,38 @@
+import {zipSync,strToU8} from 'fflate';
+const dbPromise=new Promise((resolve,reject)=>{const r=indexedDB.open('ccreplay-recorder',1);r.onupgradeneeded=()=>{r.result.createObjectStore('records',{autoIncrement:true});r.result.createObjectStore('assets',{keyPath:'url'});r.result.createObjectStore('meta');r.result.createObjectStore('video',{autoIncrement:true});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+async function tx(store,action,mode='readwrite'){const db=await dbPromise;return new Promise((resolve,reject)=>{const t=db.transaction(store,mode);const request=action(t.objectStore(store));t.oncomplete=()=>resolve(request?.result);t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error);});}
+let state={};let pending=new Set();let seen=new Set();let recorder,stream;let ordered=Promise.resolve();let bytes=0;let fetchQueue=[];let fetchWorkers=0;const downloadUrls=new Map();
+const restored=tx('meta',s=>s.get('state'),'readonly').then(s=>{state=s||{};if(state.active){state.active=false;state.error='브라우저가 종료되어 기록이 중단되었습니다. 남아 있는 데이터를 저장하세요.';return persist();}});
+function persist(){return tx('meta',s=>s.put(state,'state'));}
+function allowedURL(value){try{const u=new URL(value);return u.protocol==='https:'&&(u.hostname==='ccfolia.com'||u.hostname.endsWith('.ccfolia.com')||['firebasestorage.googleapis.com','storage.googleapis.com'].includes(u.hostname)||u.hostname.endsWith('.firebasestorage.app'));}catch{return false;}}
+function fetchAsset(url){if(seen.has(url))return;seen.add(url);fetchQueue.push(url);pump();}
+function pump(){while(fetchWorkers<4&&fetchQueue.length){const url=fetchQueue.shift();fetchWorkers++;const job=(async()=>{try{if(!allowedURL(url))throw Error('허용된 자산 호스트가 아닙니다.');const r=await fetch(url,{credentials:'omit',signal:AbortSignal.timeout(30000)});if(!r.ok)throw Error('HTTP '+r.status);const size=Number(r.headers.get('content-length')||0);if(size>150*1024*1024)throw Error('개별 자산 150 MB 제한');const reader=r.body.getReader();const chunks=[];let total=0;while(true){const {value,done}=await reader.read();if(done)break;total+=value.byteLength;if(total>150*1024*1024||bytes+total>700*1024*1024){await reader.cancel();throw Error('자산 용량 제한');}chunks.push(value);}bytes+=total;const blob=new Blob(chunks,{type:r.headers.get('content-type')?.split(';')[0]||'application/octet-stream'});await tx('assets',s=>s.put({url,blob,mime:blob.type}));}catch(e){await tx('assets',s=>s.put({url,error:e.message}));}finally{fetchWorkers--;pending.delete(job);pump();}})();pending.add(job);}}
+async function waitAssets(){while(pending.size||fetchQueue.length)await Promise.allSettled([...pending]);}
+chrome.runtime.onMessage.addListener((msg,sender,respond)=>{if(msg.target!=='offscreen')return;
+ (async()=>{await restored;
+  if(msg.type==='status')return {...state,detail:state.detail||`자산 ${seen.size}개 확인 · 다운로드 ${fetchQueue.length+fetchWorkers}개 대기`};
+  if(msg.type==='download-finished'){if(downloadUrls.has(msg.id)){URL.revokeObjectURL(downloadUrls.get(msg.id));downloadUrls.delete(msg.id);if(msg.complete){state.exported=true;state.detail='파일 저장이 완료되었습니다.';}else{state.detail='파일 저장이 취소되었거나 실패했습니다. 다시 저장하세요.';}await persist();}return {ok:true};}
+  if(msg.type==='start'){
+   for(const name of ['records','assets','video'])await tx(name,s=>s.clear());seen.clear();bytes=0;state={active:true,exists:true,exported:false,startedAt:msg.session.startedAt,roomUrl:msg.roomUrl,duration:0};await persist();
+   if(msg.streamId){try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{mandatory:{chromeMediaSource:'tab',chromeMediaSourceId:msg.streamId,maxFrameRate:30}}});const mime=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(x=>MediaRecorder.isTypeSupported(x));recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:1800000});recorder.ondataavailable=e=>{if(e.data.size)ordered=ordered.then(()=>tx('video',s=>s.add(e.data))).catch(e=>{state.error='화면 저장 실패: '+e.message;});};recorder.start(2000);state.videoMime=recorder.mimeType;stream.getVideoTracks()[0].onended=()=>{if(recorder?.state==='recording')recorder.stop();};}catch(e){state.active=false;state.error='화면 녹화를 시작할 수 없습니다: '+e.message;await persist();return {error:state.error};}}
+   return {ok:true};
+  }
+  if(msg.type==='batch'){
+   if(!state.active)return {ok:false};const records=msg.batch.filter(e=>e.kind!=='asset');for(const e of msg.batch)if(e.kind==='asset')fetchAsset(e.url);
+   for(const e of records){if(e.kind==='meta')Object.assign(state,{adapter:e.adapter,viewport:e.viewport,recordingStartedAt:e.startedAt});if(e.kind==='warning')state.error=e.text;}
+   ordered=ordered.then(()=>tx('records',s=>s.add(records))).catch(async e=>{state.error='저장 공간이 부족하거나 기록을 저장하지 못했습니다: '+e.message;state.active=false;await persist();});await ordered;await persist();return {ok:true};
+  }
+  if(msg.type==='stop'){
+   if(recorder&&recorder.state!=='inactive')await new Promise(resolve=>{recorder.addEventListener('stop',resolve,{once:true});recorder.stop();});stream?.getTracks().forEach(t=>t.stop());await ordered;state.active=false;state.duration=Date.now()-(state.recordingStartedAt||state.startedAt);await persist();return {ok:true};
+  }
+  if(msg.type==='export'){
+   if(state.active)throw Error('기록을 먼저 종료하세요.');state.detail='자산 다운로드와 파일 묶기를 마무리하는 중…';await waitAssets();await ordered;
+   const batches=await tx('records',s=>s.getAll(),'readonly');const saved=await tx('assets',s=>s.getAll(),'readonly');const videos=await tx('video',s=>s.getAll(),'readonly');const records=batches.flat();
+   const data={format:'ccreplay',version:1,title:records.find(r=>r.kind==='frame')?.room?.name||'코코포리아 세션',startedAt:state.recordingStartedAt||state.startedAt,duration:records.reduce((max,r)=>Math.max(max,r.t||0),state.duration||0),frames:records.filter(r=>r.kind==='frame'),messages:records.filter(r=>r.kind==='message'),audio:records.filter(r=>r.kind==='audio'),events:records.filter(r=>r.kind==='event').map(r=>r.event),assets:[],warnings:records.filter(r=>r.kind==='warning').map(r=>r.text),viewport:state.viewport,adapter:state.adapter};
+   const files={};for(const [i,a]of saved.entries()){if(a.error){data.warnings.push(`자산 저장 실패: ${a.url} (${a.error})`);continue;}const path='assets/'+i;data.assets.push({url:a.url,path,mime:a.mime,size:a.blob.size});files[path]=[new Uint8Array(await a.blob.arrayBuffer()),{level:0}];}
+   if(videos.length){const blob=new Blob(videos,{type:state.videoMime||'video/webm'});data.video={url:'ccreplay:video',start:Math.max(0,state.startedAt-data.startedAt)};data.assets.push({url:data.video.url,path:'assets/video',mime:blob.type.split(';')[0],size:blob.size});files['assets/video']=[new Uint8Array(await blob.arrayBuffer()),{level:0}];}
+   if(!data.audio.length&&data.frames.some(f=>f.bgm?.some(b=>b.url)))data.warnings.push('BGM은 설정되어 있지만 실제 재생 위치를 발견하지 못했습니다. 방에서 음원을 재생한 후 기록해 주세요.');
+   files['recording.json']=strToU8(JSON.stringify(data));const blob=new Blob([zipSync(files,{level:6})],{type:'application/zip'});if(blob.size>1024*1024*1024)throw Error('파일이 1 GB를 넘습니다. 짧은 구간으로 나누어 기록하세요.');const url=URL.createObjectURL(blob);const filename='CCReplay-'+new Date(data.startedAt).toISOString().replace(/[:.]/g,'-')+'.ccreplay';const result=await chrome.runtime.sendMessage({target:'download',url,filename});if(result.error){URL.revokeObjectURL(url);throw Error(result.error);}downloadUrls.set(result.id,url);state.detail=`파일 저장 대기 · 자산 ${data.assets.length}개 · 주의 ${data.warnings.length}건`;await persist();return {ok:true};
+  }
+ })().then(respond).catch(e=>respond({error:e.message}));return true;
+});

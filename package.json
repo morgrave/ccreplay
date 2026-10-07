@@ -1,0 +1,21 @@
+{
+  "name": "ccreplay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@rrweb/record": "2.0.0-alpha.18",
+    "@rrweb/replay": "2.0.0-alpha.18",
+    "fflate": "0.8.2",
+    "lucide": "0.468.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.11",
+    "fake-indexeddb": "^6.2.4"
+  }
+}

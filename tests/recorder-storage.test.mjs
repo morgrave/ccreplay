@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import 'fake-indexeddb/auto';
+import {readArchive} from '../src/core/archive.js';
+import {demoRecording} from '../src/core/demo.js';
+test('offscreen capture persists 150000 events, exports a valid archive, and protects unsaved data',async()=>{
+ let listener,download;
+ globalThis.chrome={runtime:{onMessage:{addListener(fn){listener=fn;}},async sendMessage(msg){if(msg.target==='download'){download=msg;return {id:17};}return {};}}};
+ await import('../extension/offscreen.js');
+ const call=(type,props={})=>new Promise(resolve=>listener({target:'offscreen',type,...props},{},resolve));
+ await call('start',{session:{startedAt:Date.now()},roomUrl:'https://ccfolia.com/rooms/test'});
+ const frame=demoRecording().frames[0];
+ const batch=[{kind:'meta',adapter:true,startedAt:Date.now(),viewport:{width:1280,height:720}},{kind:'frame',...frame},...Array.from({length:150000},(_,i)=>({kind:'event',event:{type:5,timestamp:Date.now()+i,data:{tag:'test',payload:{}}}}))];
+ assert.equal((await call('batch',{batch})).ok,true);
+ await call('stop');
+ const result=await call('export');assert.equal(result.ok,true,result.error);
+ assert.equal((await call('status')).exported,false,'download request is not confirmation of saved bytes');
+ const blob=await(await fetch(download.url)).blob();
+ const recording=await readArchive(new File([blob],'test.ccreplay'));
+ assert.equal(recording.data.events.length,150000);assert.equal(recording.data.frames.length,1);recording.release();
+ await call('download-finished',{id:17,complete:true});
+ assert.equal((await call('status')).exported,true);
+});

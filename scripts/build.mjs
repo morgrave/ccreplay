@@ -1,0 +1,10 @@
+import {build} from 'esbuild';
+import {mkdir,copyFile,readFile,writeFile,readdir} from 'node:fs/promises';
+import {zipSync} from 'fflate';
+await mkdir('dist',{recursive:true});
+await build({entryPoints:['src/main.js'],bundle:true,format:'esm',outfile:'dist/app.js',minify:true, sourcemap:false});
+await copyFile('index.html','dist/index.html');
+await mkdir('dist/recorder',{recursive:true});
+for(const f of ['manifest.json','popup.html','popup.css','offscreen.html'])await copyFile('extension/'+f,'dist/recorder/'+f);
+await build({entryPoints:['extension/background.js','extension/popup.js','extension/bridge.js','extension/recorder.js','extension/offscreen.js'],bundle:true,format:'iife',outdir:'dist/recorder',minify:true});
+const files={};for(const f of await readdir('dist/recorder'))files[f]=new Uint8Array(await readFile('dist/recorder/'+f));await writeFile('dist/ccreplay-recorder.zip',zipSync(files));
