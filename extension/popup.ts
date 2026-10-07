@@ -1,0 +1,53 @@
+import { errorMessage } from "../src/core/errors.ts";
+import type { RecorderState } from "./types.ts";
+const $ = (s: string) => document.querySelector<HTMLElement>(s)!;
+let state: RecorderState = {};
+async function refresh() {
+  try {
+    state = await chrome.runtime.sendMessage({
+      target: "background",
+      type: "status",
+    });
+    $("#status").textContent = state.active
+      ? "● 기록 중 · " +
+        Math.floor((Date.now() - (state.startedAt || Date.now())) / 1000) +
+        "초"
+      : state.exists
+        ? "저장할 기록이 있습니다."
+        : "기록 대기";
+    $("#start").hidden = !!state.active;
+    $("#stop").hidden = !state.active;
+    $("#export").hidden = !state.exists || !!state.active;
+    $("#detail").textContent =
+      state.error ||
+      state.detail ||
+      "기록 중에는 방 탭을 새로고침하거나 닫지 마세요.";
+  } catch (e) {
+    $("#detail").textContent = errorMessage(e);
+  }
+}
+async function run(type: string) {
+  for (const b of document.querySelectorAll("button")) b.disabled = true;
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    const result = await chrome.runtime.sendMessage({
+      target: "background",
+      type,
+      tabId: tab?.id,
+    });
+    if (result?.error) throw Error(result.error);
+    await refresh();
+  } catch (e) {
+    $("#detail").textContent = errorMessage(e);
+  } finally {
+    for (const b of document.querySelectorAll("button")) b.disabled = false;
+  }
+}
+$("#start").onclick = () => run("start");
+$("#stop").onclick = () => run("stop");
+$("#export").onclick = () => run("export");
+refresh();
+setInterval(refresh, 1500);

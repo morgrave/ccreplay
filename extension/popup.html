@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ko">
+  <meta charset="UTF-8" /><link rel="stylesheet" href="popup.css" />
+  <body>
+    <h1>CC <span>REPLAY</span></h1>
+    <p>코코포리아 방을 연 탭에서 시작하세요.</p>
+    <div id="status" role="status">기록기 확인 중…</div>
+    <p class="notice">
+      이 브라우저에서 볼 수 있는 채팅(비공개 포함)과 토큰 정보가 파일에
+      들어갑니다. 저장 전에 공유 범위를 확인하세요.
+    </p>
+    <button id="start">기록 시작</button
+    ><button id="stop" hidden>기록 종료</button
+    ><button id="export" hidden>리플레이 파일 저장</button>
+    <p id="detail"></p>
+    <script src="popup.js"></script>
+  </body>
+</html>
