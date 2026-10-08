@@ -14,6 +14,7 @@ export async function readArchive(
   file: File,
   options: {
     loadAsset?: (asset: Asset) => Promise<Uint8Array<ArrayBuffer>>;
+    signal?: AbortSignal;
   } = {},
 ): Promise<Recording> {
   if (file.size > LIMIT)
@@ -50,65 +51,73 @@ export async function readArchive(
   const rawAssets = new Map<string, Blob>();
   const urls: string[] = [];
   const styles = new Map<string, string>();
-  for (const a of data.assets || []) {
-    if (typeof a.url !== "string" || !/^assets\/[^/]+$/.test(a.path)) continue;
-    let bytes = files[a.path];
-    if (!bytes && options.loadAsset && a.sha256)
-      bytes = await options.loadAsset(a);
-    if (!bytes) continue;
-    rawAssets.set(
-      a.url,
-      new Blob([new Uint8Array(bytes)], {
-        type: a.mime || "application/octet-stream",
-      }),
-    );
-    if (a.mime === "text/css") {
-      styles.set(a.url, strFromU8(bytes));
-      continue;
-    }
-    const mime =
-      /^(image\/(png|jpeg|gif|webp|avif|svg\+xml)|audio\/[\w.+-]+|video\/[\w.+-]+|font\/[\w.+-]+|application\/(octet-stream|font-woff))$/i.test(
-        a.mime,
-      )
-        ? a.mime
-        : "application/octet-stream";
-    const url = URL.createObjectURL(
-      new Blob([new Uint8Array(bytes)], { type: mime }),
-    );
-    assets.set(a.url, url);
-    urls.push(url);
-  }
-  const resolving = new Set();
-  const resolveStyle = (u: string): string => {
-    if (assets.has(u)) return assets.get(u)!;
-    if (!styles.has(u) || resolving.has(u)) return "";
-    resolving.add(u);
-    const css = rewriteCSS(styles.get(u), (v, kind) => {
-      const key = absoluteURL(v, u);
-      return v.startsWith("#") ||
-        /^data:(?:image\/(?:png|jpeg|gif|webp|avif)|font\/[\w.+-]+);base64,/i.test(
-          v,
+  try {
+    for (const a of data.assets || []) {
+      options.signal?.throwIfAborted();
+      if (typeof a.url !== "string" || !/^assets\/[^/]+$/.test(a.path))
+        continue;
+      let bytes = files[a.path];
+      if (!bytes && options.loadAsset && a.sha256)
+        bytes = await options.loadAsset(a);
+      options.signal?.throwIfAborted();
+      if (!bytes) continue;
+      rawAssets.set(
+        a.url,
+        new Blob([new Uint8Array(bytes)], {
+          type: a.mime || "application/octet-stream",
+        }),
+      );
+      if (a.mime === "text/css") {
+        styles.set(a.url, strFromU8(bytes));
+        continue;
+      }
+      const mime =
+        /^(image\/(png|jpeg|gif|webp|avif|svg\+xml)|audio\/[\w.+-]+|video\/[\w.+-]+|font\/[\w.+-]+|application\/(octet-stream|font-woff))$/i.test(
+          a.mime,
         )
-        ? v
-        : kind === "stylesheet"
-          ? resolveStyle(key)
-          : assets.get(key) || "";
-    });
-    const local = URL.createObjectURL(new Blob([css], { type: "text/css" }));
-    assets.set(u, local);
-    urls.push(local);
-    resolving.delete(u);
-    return local;
-  };
-  for (const u of styles.keys()) resolveStyle(u);
-  return {
-    data,
-    assets,
-    rawAssets,
-    release() {
-      for (const url of urls) URL.revokeObjectURL(url);
-    },
-  };
+          ? a.mime
+          : "application/octet-stream";
+      const url = URL.createObjectURL(
+        new Blob([new Uint8Array(bytes)], { type: mime }),
+      );
+      assets.set(a.url, url);
+      urls.push(url);
+    }
+    const resolving = new Set();
+    const resolveStyle = (u: string): string => {
+      if (assets.has(u)) return assets.get(u)!;
+      if (!styles.has(u) || resolving.has(u)) return "";
+      resolving.add(u);
+      const css = rewriteCSS(styles.get(u), (v, kind) => {
+        const key = absoluteURL(v, u);
+        return v.startsWith("#") ||
+          /^data:(?:image\/(?:png|jpeg|gif|webp|avif)|font\/[\w.+-]+);base64,/i.test(
+            v,
+          )
+          ? v
+          : kind === "stylesheet"
+            ? resolveStyle(key)
+            : assets.get(key) || "";
+      });
+      const local = URL.createObjectURL(new Blob([css], { type: "text/css" }));
+      assets.set(u, local);
+      urls.push(local);
+      resolving.delete(u);
+      return local;
+    };
+    for (const u of styles.keys()) resolveStyle(u);
+    return {
+      data,
+      assets,
+      rawAssets,
+      release() {
+        for (const url of urls) URL.revokeObjectURL(url);
+      },
+    };
+  } catch (error) {
+    for (const url of urls) URL.revokeObjectURL(url);
+    throw error;
+  }
 }
 export async function makeArchive(
   data: RecordingData,

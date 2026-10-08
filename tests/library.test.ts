@@ -8,6 +8,7 @@ import {
   libraryAssetLoader,
   patchBlob,
   unpackPatch,
+  loadEpisode,
 } from "../src/core/library.ts";
 import { fixtureRecording } from "./fixtures/recording.ts";
 function recording(url: string, bytes: string) {
@@ -51,6 +52,82 @@ test("different URLs with identical bytes share assets; changed bytes at same UR
     3,
     "reapplying the same patch is idempotent",
   );
+});
+
+test("opening an episode fetches only its manifest and referenced assets", async () => {
+  const prepared = await prepareEpisode(
+    recording("https://test/a", "sound"),
+    emptyCatalog(),
+    { campaignTitle: "C", title: "E" },
+  );
+  const other = await prepareEpisode(
+    recording("https://test/b", "unrelated"),
+    emptyCatalog(),
+    { campaignTitle: "Other", title: "Other episode" },
+  );
+  const files = { ...prepared.files, ...other.files };
+  const original = globalThis.fetch;
+  const requested: string[] = [];
+  try {
+    globalThis.fetch = async (url) => {
+      const path = new URL(String(url)).pathname.replace("/repo/library/", "");
+      requested.push(path);
+      assert(files[path], "unexpected library request");
+      return new Response(files[path]);
+    };
+    const result = await loadEpisode(
+      "https://user.github.io/repo/library/",
+      prepared.patch.episode,
+    );
+    assert.deepEqual(new Set(requested), new Set(Object.keys(prepared.files)));
+    assert(!requested.some((path) => Object.hasOwn(other.files, path)));
+    result.release();
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("leaving an episode aborts loading before requesting the next asset", async () => {
+  const source = recording("https://test/a", "sound");
+  source.data.assets.push({
+    url: "https://test/b",
+    path: "assets/b",
+    mime: "audio/wav",
+    size: 6,
+  });
+  source.rawAssets.set("https://test/b", new Blob(["second"]));
+  const prepared = await prepareEpisode(source, emptyCatalog(), {
+    campaignTitle: "C",
+    title: "E",
+  });
+  const controller = new AbortController();
+  const original = globalThis.fetch;
+  const requested: string[] = [];
+  try {
+    globalThis.fetch = async (url, options) => {
+      assert.equal(options?.signal, controller.signal);
+      const path = new URL(String(url)).pathname.replace("/repo/library/", "");
+      requested.push(path);
+      return new Response(prepared.files[path]);
+    };
+    await assert.rejects(
+      () =>
+        loadEpisode(
+          "https://user.github.io/repo/library/",
+          prepared.patch.episode,
+          () => controller.abort(),
+          controller.signal,
+        ),
+      { name: "AbortError" },
+    );
+    assert.equal(
+      requested.length,
+      2,
+      "only manifest and first asset were requested",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 test("patch archive is additive and never contains an authoritative catalog replacement", async () => {
   const p = await prepareEpisode(

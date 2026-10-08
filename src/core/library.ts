@@ -259,10 +259,12 @@ async function responseBytes(r: Response, limit: number) {
 export function libraryAssetLoader(
   baseURL: string | URL,
   onProgress: (bytes: number) => void = () => {},
+  signal?: AbortSignal,
 ) {
   const cache = new Map();
   let total = 0;
   return async (a: Pick<Asset, "sha256" | "size" | "parts">) => {
+    signal?.throwIfAborted();
     if (
       !hashPattern.test(a.sha256 || "") ||
       !Array.isArray(a.parts) ||
@@ -279,6 +281,7 @@ export function libraryAssetLoader(
     const chunks = [];
     let size = 0;
     for (const part of a.parts) {
+      signal?.throwIfAborted();
       if (
         !hashPattern.test(part.hash) ||
         !Number.isSafeInteger(part.size) ||
@@ -288,7 +291,9 @@ export function libraryAssetLoader(
         throw Error("자산 조각 정보가 올바르지 않습니다.");
       let bytes = cache.get(part.hash);
       if (!bytes) {
-        const r = await fetch(new URL("assets/" + part.hash, baseURL));
+        const r = await fetch(new URL("assets/" + part.hash, baseURL), {
+          signal,
+        });
         if (!r.ok)
           throw Error("공용 자산을 찾지 못했습니다: " + part.hash.slice(0, 12));
         bytes = await responseBytes(r, part.size);
@@ -322,19 +327,21 @@ export async function loadEpisode(
   baseURL: string | URL,
   episode: Episode,
   onProgress?: (bytes: number) => void,
+  signal?: AbortSignal,
 ) {
   if (
     !idPattern.test(episode.id) ||
     episode.manifest !== `episodes/${episode.id}.ccreplay`
   )
     throw Error("에피소드 경로가 올바르지 않습니다.");
-  const r = await fetch(new URL(episode.manifest, baseURL));
+  signal?.throwIfAborted();
+  const r = await fetch(new URL(episode.manifest, baseURL), { signal });
   if (!r.ok) throw Error("에피소드 기록을 불러오지 못했습니다.");
   return readArchive(
     new File(
       [await responseBytes(r, 95 * 1024 * 1024)],
       episode.id + ".ccreplay",
     ),
-    { loadAsset: libraryAssetLoader(baseURL, onProgress) },
+    { loadAsset: libraryAssetLoader(baseURL, onProgress, signal), signal },
   );
 }

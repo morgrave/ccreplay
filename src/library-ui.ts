@@ -18,11 +18,13 @@ const mb = (n: number) =>
 export function mountLibrary({
   load,
   pause,
+  showReplay,
   showRecord,
   openFile,
 }: {
   load: (recording: Recording) => Promise<void>;
   pause: () => void;
+  showReplay: () => void;
   showRecord: () => void;
   openFile: () => void;
 }) {
@@ -32,17 +34,35 @@ export function mountLibrary({
     pending: boolean | null = null,
     prepared: PreparedEpisode | null = null,
     navSerial = 0;
+  let loadingController: AbortController | null = null;
   document.querySelector("#app")!.insertAdjacentHTML(
     "beforeend",
     `<main id="library-page"><header class="library-header"><button class="library-brand" id="library-home">${ic("play")}CC REPLAY</button><span class="library-header-space"></span><button class="button" id="library-local">${ic("folder-open")}파일 바로 열기</button><button class="button primary" id="library-add">${ic("plus")}에피소드 등록</button><button class="icon-button" id="library-recorder" aria-label="기록기 설치 안내">${ic("info")}</button></header><div class="library-body"><div class="library-breadcrumb" id="library-breadcrumb"></div><div class="library-heading"><div><span class="library-eyebrow">CAMPAIGN LIBRARY</span><h1 id="library-title">캠페인</h1><p id="library-description">같은 방에서 이어지는 이야기를 회차별로 모아보세요.</p></div><span id="library-total"></span></div><div id="library-status" role="status"></div><div id="library-list"></div><footer class="library-footer"><span>공용 자산은 한 번 저장하고 여러 에피소드에서 재사용합니다.</span></footer></div></main>
  <dialog id="library-dialog"><div class="dialog-header"><h2>에피소드 등록</h2><button class="icon-button" id="library-dialog-close" aria-label="등록 창 닫기">${ic("x")}</button></div><form id="episode-form"><label class="field-label">기록 파일<input id="episode-file" type="file" accept=".ccreplay,.zip" required></label><label class="field-label">캠페인<select id="episode-campaign"></select></label><label class="field-label" id="campaign-title-wrap">새 캠페인 이름<input id="campaign-title" maxlength="200" placeholder="캠페인 이름"></label><div class="form-pair"><label class="field-label">에피소드 제목<input id="episode-title" maxlength="200" required placeholder="1화 · 첫 만남"></label><label class="field-label">플레이한 날짜<input id="episode-date" type="date" required></label></div><p class="publish-explanation">GitHub Pages용 등록 묶음을 만듭니다. 프로젝트에 적용하고 커밋하면 캠페인 목록에 게시됩니다.</p><button class="button primary" id="episode-prepare" type="submit">등록 묶음 만들기</button><div id="episode-status" role="status"></div></form><div id="episode-result" hidden></div></dialog>`,
   );
   const status = (msg: string) => ($("#library-status").textContent = msg);
+  $("#replay-page").insertAdjacentHTML(
+    "beforeend",
+    `<section id="episode-loading" hidden aria-live="polite"><div><span class="library-eyebrow">EPISODE</span><h1 id="episode-loading-title"></h1><p id="episode-loading-status"></p><progress id="episode-loading-progress" max="1" aria-label="에피소드 자산 로딩"></progress><div class="episode-loading-actions"><button class="button" id="episode-loading-back">캠페인 목록으로</button><button class="button primary" id="episode-loading-retry" hidden>다시 시도</button></div></div></section>`,
+  );
+  const episodeStatus = (message: string) =>
+    ($("#episode-loading-status").textContent = message);
+  function setLoading(visible: boolean) {
+    const overlay = $("#episode-loading");
+    overlay.hidden = !visible;
+    for (const child of $("#replay-page").children) {
+      if (child !== overlay && child instanceof HTMLElement)
+        child.inert = visible;
+    }
+  }
+  $("#episode-loading-back").onclick = () => back();
+  $("#episode-loading-retry").onclick = () => navigate();
   function show() {
     pause();
     $("#library-page").hidden = false;
     $("#replay-page").hidden = true;
     $("#record-page").hidden = true;
+    setLoading(false);
     render();
   }
   function render() {
@@ -90,6 +110,8 @@ export function mountLibrary({
   }
   async function navigate() {
     const request = ++navSerial;
+    loadingController?.abort();
+    loadingController = null;
     const parts = location.hash.slice(1).split("/");
     if (parts[0] === "episode") {
       const c = catalog.campaigns.find((c) => c.id === parts[1]),
@@ -100,25 +122,54 @@ export function mountLibrary({
         return;
       }
       campaign = c!.id;
-      show();
-      status("에피소드와 공용 자산을 불러오는 중…");
+      const controller = new AbortController();
+      loadingController = controller;
+      pause();
+      showReplay();
+      setLoading(true);
+      $("#episode-loading-title").textContent = e.title;
+      $("#episode-loading-retry").hidden = true;
+      const progress = document.querySelector<HTMLProgressElement>(
+        "#episode-loading-progress",
+      )!;
+      progress.hidden = false;
+      progress.removeAttribute("value");
+      episodeStatus("에피소드 기록을 불러오는 중…");
       try {
-        const record = await loadEpisode(base, e, (bytes) =>
-          status(`공용 자산 ${mb(bytes)} 불러오는 중…`),
+        const record = await loadEpisode(
+          base,
+          e,
+          (bytes) => {
+            if (request !== navSerial) return;
+            const total = e.assetBytes || 0;
+            progress.value = total ? Math.min(1, bytes / total) : 0;
+            episodeStatus(
+              `이 에피소드의 자산 ${mb(bytes)}${total ? " / " + mb(total) : ""} 불러오는 중…`,
+            );
+          },
+          controller.signal,
         );
         if (request !== navSerial) {
           record.release();
           return;
         }
         await load(record);
+        if (request !== navSerial) return;
+        setLoading(false);
         $("#library-page").hidden = true;
         status("");
       } catch (error) {
-        status(errorMessage(error));
+        if (controller.signal.aborted || request !== navSerial) return;
+        episodeStatus(errorMessage(error));
+        progress.hidden = true;
+        $("#episode-loading-retry").hidden = false;
+      } finally {
+        if (loadingController === controller) loadingController = null;
       }
       return;
     }
     campaign = parts[0] === "campaign" ? parts[1] : null;
+    status("");
     show();
   }
   function add() {
@@ -218,6 +269,9 @@ export function mountLibrary({
     }
   };
   window.addEventListener("hashchange", navigate);
+  window.addEventListener("pagehide", () => loadingController?.abort(), {
+    once: true,
+  });
   refresh()
     .then(navigate)
     .catch((e) => {
@@ -225,12 +279,16 @@ export function mountLibrary({
       status(e.message);
     });
   show();
+  function back() {
+    navSerial++;
+    loadingController?.abort();
+    loadingController = null;
+    location.hash = campaign ? "campaign/" + campaign : "library";
+    show();
+    status("");
+  }
   return {
     show,
-    back() {
-      navSerial++;
-      location.hash = campaign ? "campaign/" + campaign : "library";
-      show();
-    },
+    back,
   };
 }

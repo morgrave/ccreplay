@@ -652,6 +652,7 @@ $("#replay-interaction").onclick = (e) => {
   }
 };
 document.addEventListener("keydown", (e) => {
+  if (!$("#episode-loading").hidden) return;
   if (
     ["INPUT", "TEXTAREA", "SELECT"].includes(
       document.activeElement?.tagName || "",
@@ -772,6 +773,7 @@ $("#master-volume").oninput = (e) => {
 const library = mountLibrary({
   load,
   pause,
+  showReplay: () => page("replay"),
   showRecord: () => page("record"),
   openFile: () => $("#file").click(),
 });

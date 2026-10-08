@@ -9,6 +9,34 @@
   --blue: #2196f3;
   --line: #ffffff1f;
 }
+#episode-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: #202020;
+  padding: 24px;
+}
+#episode-loading > div {
+  width: min(480px, 100%);
+}
+#episode-loading h1 {
+  overflow-wrap: anywhere;
+}
+#episode-loading-status {
+  color: #bbb;
+  line-height: 1.6;
+}
+#episode-loading-progress {
+  width: 100%;
+  accent-color: var(--blue);
+}
+.episode-loading-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
 * {
   box-sizing: border-box;
 }
