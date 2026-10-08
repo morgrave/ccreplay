@@ -12,7 +12,10 @@ test(
   "desktop buttons record a room, reject duplicate starts, and save before closing",
   { timeout: 90000 },
   async (t) => {
-    const application = await _electron.launch({ args: ["."] });
+    const executablePath = process.env.CCREPLAY_TEST_EXECUTABLE;
+    const application = await _electron.launch(
+      executablePath ? { executablePath } : { args: ["."] },
+    );
     try {
       const page = await application.firstWindow();
       const errors: string[] = [];
@@ -21,6 +24,40 @@ test(
         () => !document.querySelector<HTMLButtonElement>("#start")?.disabled,
       );
       const initialState = await page.evaluate(() => window.recorder.state());
+      const expectedPaths = await application.evaluate(({ app }) => {
+        const path = process.getBuiltinModule("path");
+        return {
+          config: path.join(
+            app.isPackaged ? process.resourcesPath : app.getAppPath(),
+            "record.config.json",
+          ),
+          output: path.join(
+            app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(),
+            "recordings",
+          ),
+        };
+      });
+      assert.equal(initialState.configPath, expectedPaths.config);
+      assert.equal(initialState.outputDir, expectedPaths.output);
+      const originalConfig = await readFile(initialState.configPath);
+      t.after(() => writeFile(initialState.configPath, originalConfig));
+      const updatedConfig = JSON.parse(
+        originalConfig.toString("utf8").replace(/^\uFEFF/, ""),
+      );
+      updatedConfig.rooms.push({
+        id: "added-room",
+        name: "Added room",
+        url: "https://ccfolia.com/rooms/test",
+      });
+      await writeFile(initialState.configPath, JSON.stringify(updatedConfig));
+      await page.click("#reload");
+      await page.waitForFunction(() =>
+        Array.from(
+          document.querySelector<HTMLSelectElement>("#room")!.options,
+        ).some((option) => option.value === "added-room"),
+      );
+      await writeFile(initialState.configPath, originalConfig);
+      await page.click("#reload");
       const preferences = join(
         dirname(initialState.configPath),
         "preferences.json",

@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { mkdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { readConfig, configuredOptions } from "../recorder/config.ts";
 import { recordRoom } from "../recorder/run.ts";
 import { exportSession } from "../recorder/storage.ts";
@@ -20,6 +21,16 @@ const state: DesktopState = {
   logs: [],
 };
 const root = app.getAppPath();
+const appDir = app.isPackaged ? dirname(process.execPath) : root;
+const settingsDir = app.isPackaged ? process.resourcesPath : root;
+// Keep portable app state beside the executable instead of in AppData.
+const runtimeDir = join(
+  appDir,
+  app.isPackaged ? ".runtime" : "work/desktop-runtime",
+);
+mkdirSync(runtimeDir, { recursive: true });
+app.setPath("userData", runtimeDir);
+app.setPath("sessionData", runtimeDir);
 const entryURL = pathToFileURL(join(root, "desktop-dist/index.html")).href;
 function publish() {
   // Coalesce batches and asset completions; the renderer receives at most four updates/sec.
@@ -179,21 +190,8 @@ async function recover() {
 app
   .whenReady()
   .then(async () => {
-    const settingsDir = app.getPath("userData");
-    await mkdir(settingsDir, { recursive: true });
     state.configPath = join(settingsDir, "record.config.json");
-    try {
-      await copyFile(
-        app.isPackaged
-          ? join(process.resourcesPath, "record.config.json")
-          : join(root, "record.config.json"),
-        state.configPath,
-        1,
-      );
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    }
-    state.outputDir = app.getPath("documents") + "/CCReplay";
+    state.outputDir = join(appDir, "recordings");
     try {
       const preferences = JSON.parse(
         await readFile(join(settingsDir, "preferences.json"), "utf8"),
