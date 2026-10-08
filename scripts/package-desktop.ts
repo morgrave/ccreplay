@@ -8,7 +8,7 @@ await access(chromium.executablePath()).catch(() => {
   throw Error("먼저 npm run desktop:install로 Chromium을 설치하세요.");
 });
 await build({
-  targets: Platform.WINDOWS.createTarget("portable"),
+  targets: Platform.WINDOWS.createTarget("zip"),
   config: {
     appId: "io.ccreplay.recorder",
     productName: "CCReplay Recorder",
@@ -25,9 +25,8 @@ await build({
     asar: true,
     win: {
       signAndEditExecutable: false,
-      artifactName: "CCReplay-Recorder-${version}.${ext}",
+      artifactName: "CCReplay-Recorder-${version}-Windows.${ext}",
     },
-    portable: { artifactName: "CCReplay-Recorder-${version}.${ext}" },
     npmRebuild: false,
     publish: null,
   },

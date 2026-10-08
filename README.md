@@ -74,7 +74,7 @@ http://127.0.0.1:4173 에서 재생기를 엽니다. `npm test`는 파일 왕복
 
 ## Windows 데스크톱 기록기
 
-`CCReplay-Recorder-0.2.0.exe`를 더블 클릭하면 터미널 없이 기록할 수 있습니다. 전용 Chromium이 포함되어 있어 Node.js나 브라우저를 별도로 설치하지 않아도 됩니다. 실행 파일은 `release/`에 만들어지며, GitHub Actions의 **Build Windows recorder** 실행 결과에서 `CCReplay-Recorder-Windows` 아티팩트를 내려받아 압축을 풀 수도 있습니다. 실행 파일과 Chromium은 Pages 웹 배포에 포함되지 않습니다.
+`CCReplay-Recorder-0.2.0-Windows.zip`을 폴더에 풀고 안의 **CCReplay Recorder.exe**를 더블 클릭하면 터미널 없이 기록할 수 있습니다. 전용 Chromium이 포함되어 있어 Node.js나 브라우저를 별도로 설치하지 않아도 됩니다. EXE와 같은 폴더의 파일들을 함께 유지하세요. 배포 ZIP은 `release/`에 만들어지며, GitHub Actions의 **Build Windows recorder** 실행 결과에서 `CCReplay-Recorder-Windows` 아티팩트를 내려받을 수도 있습니다. Actions 아티팩트를 풀면 안에 배포 ZIP이 있으며 이것도 풀어서 실행합니다. 실행 파일과 Chromium은 Pages 웹 배포에 포함되지 않습니다.
 
 1. 방 목록에서 방을 선택하고 에피소드 제목을 입력합니다.
 2. **기록 시작**을 누르면 공개 방에 접속하고 모든 공개 채팅 탭의 초기 대화를 준비합니다. 방 상태 저장, 채팅 탭별 수집, BGM 재생·정지 변화가 실시간 로그에 표시됩니다. 자산 저장·대기·실패 건수와 받은 용량도 갱신됩니다.
