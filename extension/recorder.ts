@@ -112,9 +112,9 @@ import { pickState, pickMessages } from "../src/core/model.ts";
     }
     let lastState = "";
     const lastMessages = new Map();
+    let capturedInitialMessages = false;
     let unsubscribe: (() => void) | undefined;
     function snapshot() {
-      const initialSnapshot = !lastState;
       if (!store) return;
       try {
         const s = store.getState();
@@ -133,15 +133,21 @@ import { pickState, pickMessages } from "../src/core/model.ts";
           lastState = encoded;
           findAssets(roomFrame);
         }
-        for (const m of pickMessages(s, roomId, true)) {
+        const messages = pickMessages(s, roomId, true);
+        for (const m of messages) {
           const encoded = JSON.stringify(m);
           if (lastMessages.get(m.id) !== encoded) {
             lastMessages.set(m.id, encoded);
-            push("message", { t: initialSnapshot ? 0 : time(), ...m });
+            push("message", {
+              ...m,
+              t: capturedInitialMessages ? time() : 0,
+              ...(!capturedInitialMessages ? { initial: true } : {}),
+            });
             asset(m.iconUrl);
             asset(m.imageUrl);
           }
         }
+        capturedInitialMessages = true;
       } catch (e) {
         push("warning", {
           t: time(),

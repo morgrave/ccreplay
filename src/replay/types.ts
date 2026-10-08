@@ -35,6 +35,8 @@ export interface ChatMessage {
   imageUrl?: string;
   color?: string;
   createdAt?: number;
+  /** Present in the first room-state snapshot, before recording changes. */
+  initial?: boolean;
   removed?: boolean;
   private?: boolean;
   edited?: boolean;

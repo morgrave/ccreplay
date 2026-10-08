@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": "eceed9c2-4afd-44d8-89b6-d5bfe2e8904b",
+  "revision": "49bde496-e3e7-4385-b7a7-8300112eefac",
   "campaigns": [
     {
       "id": "c6b4db5e-d28f-490c-bd87-50d78385f358",
@@ -14,7 +14,7 @@
           "date": "2026-10-07",
           "duration": 23686,
           "manifest": "episodes/3ceb3dbd-94f9-4589-857b-7e7c5a5c1a32.ccreplay",
-          "bytes": 113404,
+          "bytes": 113427,
           "assetCount": 80,
           "assetBytes": 25209416,
           "createdAt": "2026-10-07T12:47:46.602Z"

@@ -278,5 +278,37 @@ export function validateRecording(data: ExternalRecord): RecordingData {
     )
       throw new Error("오디오 정보가 올바르지 않습니다.");
   }
-  return data as RecordingData;
+  return normalizeInitialMessages(data as RecordingData);
+}
+
+/** Older recorders timestamped the initial chat batch by observation delay. */
+export function normalizeInitialMessages(data: RecordingData): RecordingData {
+  const firstBatch = data.messages[0]?.t;
+  const snapshot = data.events.find((event) => event.type === 2);
+  const snapshotTime =
+    snapshot && Number.isFinite(data.startedAt)
+      ? snapshot.timestamp - data.startedAt!
+      : -1;
+  const legacyBatch =
+    firstBatch !== undefined && firstBatch > 0 && firstBatch <= snapshotTime;
+  const seen = new Set<string>();
+  data.messages = data.messages
+    .map((message) => {
+      const first = !seen.has(message.id);
+      seen.add(message.id);
+      const existedBeforeStart =
+        Number.isFinite(message.createdAt) &&
+        message.createdAt! > 0 &&
+        message.createdAt! <= (data.startedAt || 0);
+      if (
+        first &&
+        !message.removed &&
+        (message.initial === true ||
+          (legacyBatch && message.t === firstBatch && existedBeforeStart))
+      )
+        return { ...message, t: 0, initial: true };
+      return message;
+    })
+    .sort((a, b) => a.t - b.t);
+  return data;
 }
