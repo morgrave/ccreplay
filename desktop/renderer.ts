@@ -12,7 +12,7 @@ function roomSettings() {
   const settings = { ...current?.config?.defaults, ...selected };
   element<HTMLInputElement>("title").value = settings.title || selected.name;
   element<HTMLInputElement>("duration").value = String(
-    settings.duration || 86400,
+    settings.duration ?? 86400,
   );
   element<HTMLInputElement>("padding").value = String(settings.padding ?? 5);
   element<HTMLInputElement>("trim").checked = settings.trim ?? true;

@@ -71,7 +71,7 @@ function validateRequest(input: unknown): StartRequest {
     typeof r.trim !== "boolean" ||
     typeof r.duration !== "number" ||
     !Number.isFinite(r.duration) ||
-    r.duration <= 0 ||
+    r.duration < 0 ||
     r.duration > 86400 ||
     typeof r.padding !== "number" ||
     !Number.isFinite(r.padding) ||
@@ -79,7 +79,7 @@ function validateRequest(input: unknown): StartRequest {
     r.padding > 3600
   )
     throw Error(
-      "제목, 최대 기록 시간(1~86400초), 여유 시간(0~3600초)을 확인하세요.",
+      "제목, 최대 기록 시간(0~86400초, 0은 무제한), 여유 시간(0~3600초)을 확인하세요.",
     );
   return r;
 }

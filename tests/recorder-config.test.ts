@@ -54,7 +54,7 @@ test("config rejects malformed settings and supports Windows BOM JSON", async (t
     {},
     { ...fixture(), version: 2 },
     { ...fixture(), rooms: [] },
-    { ...fixture(), defaults: { duration: 0 } },
+    { ...fixture(), defaults: { duration: -1 } },
     { ...fixture(), defaults: { padding: "5" } },
     { ...fixture(), defaults: { trim: "false" } },
     { ...fixture(), rooms: [fixture().rooms[0], fixture().rooms[0]] },
@@ -71,4 +71,17 @@ test("config rejects malformed settings and supports Windows BOM JSON", async (t
   assert.equal((await readConfig(path)).rooms.length, 2);
   await writeFile(path, "{invalid}");
   await assert.rejects(readConfig(path), /기록 설정을 읽지 못했습니다/);
+});
+
+test("zero duration survives config defaults and room overrides as unlimited", () => {
+  const config = validateConfig({ ...fixture(), defaults: { duration: 0 } });
+  assert.equal(configuredOptions(config, config.rooms[0], "saved").duration, 0);
+  const roomConfig = validateConfig({
+    ...fixture(),
+    rooms: [{ ...fixture().rooms[0], duration: 0 }],
+  });
+  assert.equal(
+    configuredOptions(roomConfig, roomConfig.rooms[0], "saved").duration,
+    0,
+  );
 });

@@ -39,11 +39,12 @@ function settings(value: Record<string, unknown>, label: string): Settings {
     if (
       typeof value.duration !== "number" ||
       !Number.isFinite(value.duration) ||
-      value.duration <= 0 ||
+      value.duration < 0 ||
       value.duration > 86400
     )
       throw Error(
-        label + ".duration은 0보다 크고 86400 이하인 초 단위 숫자입니다.",
+        label +
+          ".duration은 0~86400 사이의 초 단위 숫자입니다. 0은 무제한입니다.",
       );
     result.duration = value.duration;
   }

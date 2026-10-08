@@ -44,6 +44,7 @@ test(
       const updatedConfig = JSON.parse(
         originalConfig.toString("utf8").replace(/^\uFEFF/, ""),
       );
+      updatedConfig.defaults.duration = 0;
       updatedConfig.rooms.push({
         id: "added-room",
         name: "Added room",
@@ -56,6 +57,7 @@ test(
           document.querySelector<HTMLSelectElement>("#room")!.options,
         ).some((option) => option.value === "added-room"),
       );
+      assert.equal(await page.locator("#duration").inputValue(), "0");
       await writeFile(initialState.configPath, originalConfig);
       await page.click("#reload");
       const preferences = join(
@@ -115,7 +117,7 @@ test(
         { folder, script: fixture.outputFiles[0].text },
       );
       await page.click("#folder");
-      await page.fill("#duration", "30");
+      await page.fill("#duration", "0");
       await page.fill("#title", "Desktop integration");
       // Only configured rooms can be started, regardless of renderer input.
       await assert.rejects(
@@ -139,6 +141,16 @@ test(
         () => Number(document.querySelector("#messages")?.textContent) > 0,
       );
       assert.equal(await page.locator("#start").isDisabled(), true);
+      await page.waitForTimeout(1200);
+      assert.equal(
+        (await page.evaluate(() => window.recorder.state())).active,
+        true,
+      );
+      assert.ok(
+        (await page.evaluate(() => window.recorder.state())).logs.some((log) =>
+          log.text.includes("시간 제한 없음"),
+        ),
+      );
       await assert.rejects(
         page.evaluate(() =>
           window.recorder.start({

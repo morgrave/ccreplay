@@ -170,7 +170,9 @@ export async function recordRoom(options: RecordOptions) {
     }, 30000);
     log(
       "기록 중 · ‘종료하고 저장’ 버튼으로 마칩니다." +
-        (options.duration ? ` · ${options.duration}초 후 자동 종료` : ""),
+        (options.duration
+          ? ` · ${options.duration}초 후 자동 종료`
+          : " · 시간 제한 없음"),
     );
     // A navigation destroys the capture hook. Preserve the partial session instead of silently losing time.
     page.on("framenavigated", (frame) => {
@@ -180,7 +182,8 @@ export async function recordRoom(options: RecordOptions) {
     page.on("close", () => {
       if (started) fail(Error("방 페이지가 닫혔습니다."));
     });
-    if (options.duration) timer = setTimeout(finish, options.duration * 1000);
+    if (options.duration !== undefined && options.duration > 0)
+      timer = setTimeout(finish, options.duration * 1000);
     status = setInterval(() => report("recording"), 1000);
     await finished;
     progress.stop();
