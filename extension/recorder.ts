@@ -2,6 +2,7 @@ import type { RoomEvent } from "../src/replay/types.ts";
 import type { ReduxStore } from "./types.ts";
 import type { ExternalRecord } from "../src/core/types.ts";
 import { roomEventFilter } from "../src/core/room-events.ts";
+import { isScriptResource } from "../src/core/resource-policy.ts";
 import { record } from "@rrweb/record";
 import { createStyleCollector } from "./capture-styles.ts";
 import { pickState, pickMessages } from "../src/core/model.ts";
@@ -95,7 +96,13 @@ import { pickState, pickMessages } from "../src/core/model.ts";
     }
     const assets = new Set();
     function asset(url: string, resourceType?: string) {
-      if (!url || assets.has(url) || !/^https?:/.test(url)) return;
+      if (
+        !url ||
+        assets.has(url) ||
+        !/^https?:/.test(url) ||
+        isScriptResource(url)
+      )
+        return;
       assets.add(url);
       push("asset", { url, resourceType });
     }

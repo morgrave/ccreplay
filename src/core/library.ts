@@ -328,6 +328,7 @@ export async function loadEpisode(
   episode: Episode,
   onProgress?: (bytes: number) => void,
   signal?: AbortSignal,
+  options: { progressive?: boolean } = {},
 ) {
   if (
     !idPattern.test(episode.id) ||
@@ -342,6 +343,29 @@ export async function loadEpisode(
       [await responseBytes(r, 95 * 1024 * 1024)],
       episode.id + ".ccreplay",
     ),
-    { loadAsset: libraryAssetLoader(baseURL, onProgress, signal), signal },
+    {
+      loadAsset: libraryAssetLoader(baseURL, onProgress, signal),
+      signal,
+      assetOrigin: options.progressive ? new URL(baseURL).origin : undefined,
+      assetURL: options.progressive
+        ? (asset) => {
+            // Single-part content-addressed objects can be streamed by the browser.
+            // Multi-part objects still require verified assembly before use.
+            if (!Array.isArray(asset.parts) || asset.parts.length !== 1)
+              return undefined;
+            const part = asset.parts[0];
+            if (
+              !hashPattern.test(asset.sha256 || "") ||
+              part.hash !== asset.sha256 ||
+              !Number.isSafeInteger(part.size) ||
+              part.size < 0 ||
+              part.size > CHUNK_SIZE ||
+              part.size !== asset.size
+            )
+              throw Error("자산 조각 정보가 올바르지 않습니다.");
+            return new URL("assets/" + part.hash, baseURL).href;
+          }
+        : undefined,
+    },
   );
 }

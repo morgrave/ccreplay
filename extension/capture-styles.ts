@@ -34,6 +34,7 @@ export function createStyleCollector(
     );
   };
   function attrs(values: ExternalRecord, tag?: string, href = base) {
+    if (tag === "script" || tag === "iframe") return values;
     for (const [key, v] of Object.entries(values || {})) {
       if (v === null) continue;
       const k = key.toLowerCase();

@@ -40,7 +40,7 @@ export class AudioEngine {
       if (!item || item.src !== src) {
         item?.audio.pause();
         const audio = new Audio(src);
-        audio.preload = "auto";
+        audio.preload = "metadata";
         audio.onerror = () =>
           this.onError("이 브라우저에서 재생할 수 없는 음원입니다.");
         item = { audio, src };

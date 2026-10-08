@@ -9,12 +9,15 @@ import { strToU8, strFromU8 } from "fflate";
 import { compress } from "./compression.ts";
 import { validateRecording } from "./model.ts";
 import { rewriteCSS, rewriteSrcset, absoluteURL } from "./css.ts";
+import { isReplayAsset } from "./resource-policy.ts";
 const LIMIT = 1024 * 1024 * 1024;
 export async function readArchive(
   file: File,
   options: {
     loadAsset?: (asset: Asset) => Promise<Uint8Array<ArrayBuffer>>;
     signal?: AbortSignal;
+    assetURL?: (asset: Asset) => string | undefined;
+    assetOrigin?: string;
   } = {},
 ): Promise<Recording> {
   if (file.size > LIMIT)
@@ -38,6 +41,7 @@ export async function readArchive(
   const data = validateRecording(
     JSON.parse(strFromU8(files["recording.json"])),
   );
+  data.assets = data.assets.filter((asset) => isReplayAsset(asset.mime));
   if (
     data.assetStorage === "sha256-chunks-v1" &&
     (data.assets || []).reduce((n, a) => n + (Number(a.size) || 0), 0) > LIMIT
@@ -56,6 +60,11 @@ export async function readArchive(
       options.signal?.throwIfAborted();
       if (typeof a.url !== "string" || !/^assets\/[^/]+$/.test(a.path))
         continue;
+      const progressiveURL = options.assetURL?.(a);
+      if (progressiveURL && a.mime !== "text/css" && a.mime !== "image/svg+xml") {
+        assets.set(a.url, progressiveURL);
+        continue;
+      }
       let bytes = files[a.path];
       if (!bytes && options.loadAsset && a.sha256)
         bytes = await options.loadAsset(a);
@@ -110,6 +119,18 @@ export async function readArchive(
       data,
       assets,
       rawAssets,
+      assetOrigin: options.assetOrigin,
+      async resolveAsset(url) {
+        const saved = rawAssets.get(url);
+        if (saved) return saved;
+        const asset = data.assets.find((asset) => asset.url === url);
+        if (!asset || !options.loadAsset)
+          throw Error("자산을 찾지 못했습니다.");
+        const bytes = await options.loadAsset(asset);
+        const blob = new Blob([bytes], { type: asset.mime });
+        rawAssets.set(url, blob);
+        return blob;
+      },
       release() {
         for (const url of urls) URL.revokeObjectURL(url);
       },
@@ -143,16 +164,22 @@ export function downloadBlob(blob: Blob, name: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
-// Rebuild styles without restoring scripts, navigation, or remote network access.
+// Restore only registered resources; scripts, navigation and frames stay blocked.
 export function sanitizeEvents(
   events: ExternalRecord[],
   assets: Map<string, string>,
+  assetOrigin?: string,
 ) {
   const sentinel = 2000000001,
     styleNodes = new Set(),
     tagNames = new Map();
-  const policy =
-    "default-src 'none'; img-src blob: data:; media-src blob: data:; style-src 'unsafe-inline' blob:; font-src blob: data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+  const trustedOrigin =
+    assetOrigin &&
+    (assetOrigin === "https://raw.githubusercontent.com" ||
+      /^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/.test(assetOrigin))
+      ? " " + assetOrigin
+      : "";
+  const policy = `default-src 'none'; img-src blob: data:${trustedOrigin}; media-src blob: data:${trustedOrigin}; style-src 'unsafe-inline' blob:; font-src blob: data:${trustedOrigin}; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`;
   let base =
     events.find((e) => e.type === 4)?.data?.href || "https://ccfolia.com/";
   const resolve = (value: unknown) => {

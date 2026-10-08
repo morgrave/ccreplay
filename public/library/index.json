@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": "49bde496-e3e7-4385-b7a7-8300112eefac",
+  "revision": "fa7eb466-f3d8-46f2-ae31-dc00cd2eab5d",
   "campaigns": [
     {
       "id": "c6b4db5e-d28f-490c-bd87-50d78385f358",
@@ -14,9 +14,9 @@
           "date": "2026-10-07",
           "duration": 23686,
           "manifest": "episodes/3ceb3dbd-94f9-4589-857b-7e7c5a5c1a32.ccreplay",
-          "bytes": 113427,
-          "assetCount": 80,
-          "assetBytes": 25209416,
+          "bytes": 113000,
+          "assetCount": 78,
+          "assetBytes": 20726931,
           "createdAt": "2026-10-07T12:47:46.602Z"
         }
       ]
@@ -77,12 +77,10 @@
     "06d80cf01250132fd1068701108453feee68854b750d22c344ffc0de395e1dcb": 2048,
     "12459f221a0b787bf1eaebf2e4c48fca2bd9f8493f71256c3043e7a0c7e932f6": 2152,
     "bb229a48bee31f5d54ca12dc9bd960c63a671f0d4be86a054c1d324a44499d96": 37,
-    "85dc8351131eb8cb8f12fd95373b2ef50a7f6089af624aa471b81adb9600c275": 4477589,
     "a719347d0fdd23fd92cb6cd348c09db25cd7d2afe2738ab1a68641659e5de478": 40250,
     "3f78744cc7ccdb2d96b41f03a253e813efb0b7028b03322a55cb49818c4ea054": 54144,
     "798df7a1566be14772cd2b7a2a1f719a297e38620422490d53f51fd122d4a732": 20526,
     "4485f602e17664d2d3509e434a3fe656e7b37f75f356a43d2a08d4677dc9c6c5": 245,
-    "9c306370b1420f3f2ffe223492cabb42a2179cf3437e7c78f0295099d9d84cb9": 4896,
     "82cc85bd416dc825c05b4264a8a58e189e528fed8a05fbd471b5493e010d623b": 8680,
     "0d17b7880f389deeb6663a52fa4eadc6d9116bdda725f0aa1f3d404fbb7d3d59": 31356,
     "d0fa07ff63dd60cbc0e2f58e29c802dca2a5ae0276c999f59c6111ab7bbaec3b": 18612,

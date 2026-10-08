@@ -129,6 +129,43 @@ test("leaving an episode aborts loading before requesting the next asset", async
     globalThis.fetch = original;
   }
 });
+
+test("progressive episodes return media URLs before downloading media; export still verifies bytes", async () => {
+  const prepared = await prepareEpisode(
+    recording("https://test/music", "sound"),
+    emptyCatalog(),
+    { campaignTitle: "C", title: "E" },
+  );
+  const base =
+    "https://raw.githubusercontent.com/user/repo/revision/public/library/";
+  const requests: string[] = [];
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url) => {
+      const path = String(url).slice(base.length);
+      requests.push(path);
+      return new Response(prepared.files[path]);
+    };
+    const result = await loadEpisode(
+      base,
+      prepared.patch.episode,
+      undefined,
+      undefined,
+      { progressive: true },
+    );
+    assert.deepEqual(requests, [prepared.patch.episode.manifest]);
+    assert.equal(result.assetOrigin, "https://raw.githubusercontent.com");
+    assert(
+      result.assets.get("https://test/music")?.startsWith(base + "assets/"),
+    );
+    const blob = await result.resolveAsset!("https://test/music");
+    assert.equal(await blob.text(), "sound");
+    assert.equal(requests.length, 2);
+    result.release();
+  } finally {
+    globalThis.fetch = original;
+  }
+});
 test("patch archive is additive and never contains an authoritative catalog replacement", async () => {
   const p = await prepareEpisode(
     recording("https://test/a", "a"),

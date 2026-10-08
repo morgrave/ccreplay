@@ -1,4 +1,5 @@
 import { errorMessage } from "../src/core/errors.ts";
+import { isScriptResource } from "../src/core/resource-policy.ts";
 import type { RecorderState } from "./types.ts";
 import type { ExternalRecord, Asset } from "../src/core/types.ts";
 import type { Zippable } from "fflate";
@@ -69,6 +70,7 @@ function allowedURL(value: string) {
   }
 }
 function fetchAsset(url: string, resourceType?: string) {
+  if (isScriptResource(url)) return;
   if (seen.has(url)) return;
   seen.add(url);
   fetchQueue.push({ url, resourceType });

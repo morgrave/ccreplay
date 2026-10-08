@@ -383,6 +383,7 @@ async function load(recording: Recording, show = true) {
             .map(roomEventFilter())
             .filter((e): e is RoomEvent => e !== null),
           current!.assets,
+          current!.assetOrigin,
         ) as eventWithTime[],
         {
           root: $("#dom-replay"),
@@ -441,6 +442,9 @@ async function exportCurrent() {
     for (const [original, local] of current!.assets) {
       const blob =
           current!.rawAssets?.get(original) ||
+          (current!.resolveAsset
+            ? await current!.resolveAsset(original)
+            : undefined) ||
           (await (await fetch(local)).blob()),
         path = "assets/" + i++;
       d.assets.push({ url: original, path, mime: blob.type, size: blob.size });
@@ -470,7 +474,7 @@ function showAssets() {
   for (const a of d.audio) if (a.url && !url(a.url)) missing.add(a.url);
   dialog(
     "보관된 파일",
-    `<p>음원과 이미지 ${current!.assets.size}개가 포함되어 있습니다. 외부 주소를 자동으로 다시 요청하지 않습니다.</p>${missing.size ? `<h3>빠진 파일 ${missing.size}개</h3>${[...missing].map((u) => `<div class="missing-file"><span>${esc(u.split("?")[0].slice(-100))}</span><button class="button" data-repair="${esc(u)}">파일 연결</button></div>`).join("")}` : '<div class="success-note">장면과 소리에 필요한 파일이 준비되어 있습니다.</div>'}${d.warnings?.length ? `<h3>기록 주의사항</h3><ul class="warning-list">${d.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}<p>파일 연결 후 상단 저장 버튼을 누르면 새 기록 파일에 함께 포함됩니다.</p>`,
+    `<p>보관된 자산 ${current!.assets.size}개를 사용합니다. 캠페인 회차는 저장소에서 필요한 파일을 로딩하고, 독립 기록 파일은 포함된 자산을 사용합니다. 코코포리아 원래 주소는 요청하지 않습니다.</p>${missing.size ? `<h3>빠진 파일 ${missing.size}개</h3>${[...missing].map((u) => `<div class="missing-file"><span>${esc(u.split("?")[0].slice(-100))}</span><button class="button" data-repair="${esc(u)}">파일 연결</button></div>`).join("")}` : '<div class="success-note">장면과 소리에 필요한 파일이 준비되어 있습니다.</div>'}${d.warnings?.length ? `<h3>기록 주의사항</h3><ul class="warning-list">${d.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}<p>파일 연결 후 상단 저장 버튼을 누르면 새 기록 파일에 함께 포함됩니다.</p>`,
   );
 }
 $("#file").onchange = (e) =>

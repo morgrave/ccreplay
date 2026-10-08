@@ -148,6 +148,7 @@ export function mountLibrary({
             );
           },
           controller.signal,
+          { progressive: true },
         );
         if (request !== navSerial) {
           record.release();

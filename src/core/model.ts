@@ -5,6 +5,7 @@ import type {
   RecordingData,
 } from "./types.ts";
 import type { ChatMessage } from "../replay/types.ts";
+import { replayWarnings } from "./resource-policy.ts";
 export const FORMAT = "ccreplay";
 export const VERSION = 1;
 export const clamp = (n: unknown, min: number, max: number) =>
@@ -278,6 +279,7 @@ export function validateRecording(data: ExternalRecord): RecordingData {
     )
       throw new Error("오디오 정보가 올바르지 않습니다.");
   }
+  data.warnings = replayWarnings(data.warnings);
   return normalizeInitialMessages(data as RecordingData);
 }
 

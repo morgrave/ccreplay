@@ -71,6 +71,9 @@ export interface Recording {
   data: RecordingData;
   assets: Map<string, string>;
   rawAssets?: Map<string, Blob>;
+  /** Trusted library origin for browser-native progressive media loading. */
+  assetOrigin?: string;
+  resolveAsset?: (url: string) => Promise<Blob>;
   release(): void;
 }
 export interface Episode {
