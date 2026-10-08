@@ -1,4 +1,4 @@
-import type { ReduxStore } from "./types.ts";
+import type { ReduxStore } from "./capture-types.ts";
 import type { ExternalRecord } from "../src/core/types.ts";
 export function discoverRoomRuntime() {
   let store: ReduxStore | undefined;

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>CC Replay 기록기</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="renderer.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div>
+        <span class="eyebrow">CC REPLAY RECORDER</span>
+        <h1>세션의 이야기를 기록하세요</h1>
+        <p>
+          등록된 방을 골라 시작하면 모든 공개 채팅 탭과 방의 변화가 기록됩니다.
+        </p>
+      </div>
+      <span id="status" role="status">준비 중</span>
+    </header>
+    <main>
+      <section class="setup" aria-label="기록 설정">
+        <div class="fields">
+          <label>기록할 방<select id="room"></select></label>
+          <label
+            >에피소드 제목<input
+              id="title"
+              maxlength="200"
+              placeholder="에피소드 이름"
+          /></label>
+          <label
+            >최대 기록 시간 (초)<input
+              id="duration"
+              type="number"
+              min="1"
+              max="86400"
+              value="86400"
+          /></label>
+          <label
+            >앞뒤 여유 시간 (초)<input
+              id="padding"
+              type="number"
+              min="0"
+              max="3600"
+              value="5"
+          /></label>
+        </div>
+        <div class="actions">
+          <label class="check"
+            ><input id="trim" type="checkbox" checked /> 앞뒤의 변화 없는 구간
+            정리</label
+          >
+          <div>
+            <button id="stop" disabled>종료하고 저장</button
+            ><button id="start" class="primary" disabled>기록 시작</button>
+          </div>
+        </div>
+        <p id="room-url" class="path"></p>
+      </section>
+      <section class="metrics" aria-label="실시간 기록 현황">
+        <div><span>기록 시간</span><strong id="elapsed">00:00:00</strong></div>
+        <div><span>방 상태</span><strong id="frames">0</strong></div>
+        <div><span>채팅 기록</span><strong id="messages">0</strong></div>
+        <div><span>BGM 이벤트</span><strong id="audio">0</strong></div>
+        <div><span>자산 저장</span><strong id="assets">0</strong></div>
+      </section>
+      <p id="asset-status" role="status">자산 다운로드 대기 0개 · 0.0 MiB</p>
+      <p id="error" role="alert" hidden></p>
+      <p id="result" hidden></p>
+      <section class="journal">
+        <div class="journal-heading">
+          <h2>실시간 기록 로그</h2>
+          <label class="check"
+            ><input id="follow" type="checkbox" checked /> 최신 로그
+            따라가기</label
+          >
+        </div>
+        <p class="hint">
+          초기 대화와 변경된 메시지를 포함한 저장 건수입니다. BGM 이벤트에는
+          재생 위치 갱신도 포함됩니다.
+        </p>
+        <div
+          id="logs"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+          tabindex="0"
+        >
+          <p class="empty">기록을 시작하면 여기에 진행 상황이 표시됩니다.</p>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <div class="paths">
+        <p>설정 <span id="config-path"></span></p>
+        <p>저장 <span id="output-path"></span></p>
+      </div>
+      <div class="tools">
+        <button id="config">방 목록 설정 열기</button
+        ><button id="reload">설정 다시 읽기</button
+        ><button id="folder">저장 위치 변경</button
+        ><button id="output">저장 폴더 열기</button
+        ><button id="recover">중단된 기록 복구</button>
+      </div>
+    </footer>
+  </body>
+</html>

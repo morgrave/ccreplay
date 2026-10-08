@@ -1,13 +1,5 @@
 import { build } from "esbuild";
-import {
-  mkdir,
-  copyFile,
-  readFile,
-  writeFile,
-  readdir,
-  rm,
-} from "node:fs/promises";
-import { zipSync } from "fflate";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 const out = resolve("dist");
 if (dirname(out) !== process.cwd()) throw Error("Unexpected build output path");
@@ -53,23 +45,3 @@ if (revision && /^[a-f0-9]{40}$/.test(revision)) {
 }
 await writeFile("dist/index.html", html);
 await writeFile("dist/.nojekyll", "");
-await mkdir("dist/recorder", { recursive: true });
-for (const f of ["manifest.json", "popup.html", "popup.css", "offscreen.html"])
-  await copyFile("extension/" + f, "dist/recorder/" + f);
-await build({
-  entryPoints: [
-    "extension/background.ts",
-    "extension/popup.ts",
-    "extension/bridge.ts",
-    "extension/recorder.ts",
-    "extension/offscreen.ts",
-  ],
-  bundle: true,
-  format: "iife",
-  outdir: "dist/recorder",
-  minify: true,
-});
-const files: Record<string, Uint8Array> = {};
-for (const f of await readdir("dist/recorder"))
-  files[f] = new Uint8Array(await readFile("dist/recorder/" + f));
-await writeFile("dist/ccreplay-recorder.zip", zipSync(files));

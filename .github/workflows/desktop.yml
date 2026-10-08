@@ -1,0 +1,45 @@
+name: Build Windows recorder
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - desktop/**
+      - recorder/**
+      - src/core/**
+      - src/replay/**
+      - scripts/build-desktop.ts
+      - scripts/package-desktop.ts
+      - record.config.json
+      - package*.json
+      - tsconfig.json
+      - .github/workflows/desktop.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-recorder
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run desktop:install
+      - run: npm run test:desktop
+      - run: npm run desktop:package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CCReplay-Recorder-Windows
+          path: release/CCReplay-Recorder-*.exe
+          if-no-files-found: error
+          retention-days: 14

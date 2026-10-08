@@ -4,7 +4,7 @@ import { mkdtemp, readFile, appendFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RecordingStore, exportSession } from "../recorder/storage.ts";
-import { parseOptions, roomURL } from "../recorder/options.ts";
+import { roomURL } from "../recorder/url.ts";
 import { readArchive } from "../src/core/archive.ts";
 import { fixtureRecording } from "./fixtures/recording.ts";
 
@@ -20,18 +20,6 @@ test("automatic recorder accepts public room URLs and validates duration/output 
     "https://ccfolia.com/",
   ])
     assert.throws(() => roomURL(url));
-  for (const value of ["0", "-1", "NaN", "Infinity", "86401"])
-    assert.throws(() =>
-      parseOptions(["https://ccfolia.com/rooms/x", "--duration", value]),
-    );
-  assert.equal(
-    parseOptions(["https://ccfolia.com/rooms/x", "--duration", "1.5"]).duration,
-    1.5,
-  );
-  assert.throws(() =>
-    parseOptions(["https://ccfolia.com/rooms/x", "--recover", "a"]),
-  );
-  assert.ok(parseOptions(["--help"]).help);
 });
 
 test("unattended journal exports initial state, ordered changes and recursive CSS assets; recovery preserves partial data", async (t) => {

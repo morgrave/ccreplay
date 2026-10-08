@@ -1,15 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { join, dirname, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import {
   validateConfig,
   configuredOptions,
-  chooseRoom,
   readConfig,
 } from "../recorder/config.ts";
-import { parseOptions } from "../recorder/options.ts";
 
 const fixture = () => ({
   version: 1,
@@ -26,66 +24,26 @@ const fixture = () => ({
   ],
 });
 
-test("record without arguments opens selection; IDs/numbers select rooms and conflicting modes reject", () => {
-  assert.equal(parseOptions([]).url, undefined);
+test("desktop room settings override defaults and filename stays in the chosen folder", () => {
   const config = validateConfig(fixture());
-  assert.equal(chooseRoom(config, "1")?.id, "feria");
-  assert.equal(chooseRoom(config, " second ")?.id, "second");
-  assert.equal(chooseRoom(config, "99"), undefined);
-  for (const args of [
-    ["--room", "feria", "https://ccfolia.com/rooms/x"],
-    ["--list", "--room", "feria"],
-    ["--recover", "saved.session", "--room", "feria"],
-  ])
-    assert.throws(() => parseOptions(args));
-});
-
-test("CLI overrides room settings, room overrides defaults, and output stays relative to the config", () => {
-  const config = validateConfig(fixture());
-  const cli = parseOptions([
-    "--config",
-    "settings/record.json",
-    "--room",
-    "feria",
-  ]);
-  const now = new Date("2026-10-08T01:02:03Z");
-  const selected = configuredOptions(cli, config, config.rooms[0], now);
+  const selected = configuredOptions(
+    config,
+    config.rooms[0],
+    "saved",
+    new Date("2026-10-08T01:02:03Z"),
+  );
   assert.equal(selected.duration, 86400);
   assert.equal(selected.padding, 10000);
-  assert.equal(selected.title, "엔딩 이후");
   assert.equal(selected.trim, true);
   assert.equal(
     selected.out,
     resolve(
-      dirname(cli.config),
-      "saved/페리아의 문장-2026-10-08T01-02-03-000Z.ccreplay",
+      "saved",
+      config.rooms[0].name + "-2026-10-08T01-02-03-000Z.ccreplay",
     ),
   );
-  const overridden = configuredOptions(
-    parseOptions([
-      "--room",
-      "feria",
-      "--duration",
-      "12",
-      "--padding",
-      "0",
-      "--no-trim",
-      "--title",
-      "다음 화",
-      "--out",
-      "recordings/custom.ccreplay",
-    ]),
-    config,
-    config.rooms[0],
-    now,
-  );
-  assert.equal(overridden.duration, 12);
-  assert.equal(overridden.padding, 0);
-  assert.equal(overridden.trim, false);
-  assert.equal(overridden.title, "다음 화");
-  assert.equal(overridden.out, resolve("recordings/custom.ccreplay"));
   assert.equal(
-    configuredOptions(cli, config, config.rooms[1], now).padding,
+    configuredOptions(config, config.rooms[1], "saved").padding,
     5000,
   );
 });

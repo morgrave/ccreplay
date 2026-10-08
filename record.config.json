@@ -3,8 +3,7 @@
   "defaults": {
     "duration": 86400,
     "trim": true,
-    "padding": 5,
-    "outputDir": "recordings"
+    "padding": 5
   },
   "rooms": [
     {

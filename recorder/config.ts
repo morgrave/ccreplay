@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { roomURL, type parseOptions } from "./options.ts";
+import { resolve } from "node:path";
+import { roomURL } from "./url.ts";
 
 interface Settings {
   title?: string;
@@ -8,7 +8,6 @@ interface Settings {
   trim?: boolean;
   /** Seconds in JSON, milliseconds in the recorder. */
   padding?: number;
-  outputDir?: string;
 }
 export interface ConfigRoom extends Settings {
   id: string;
@@ -33,7 +32,7 @@ function text(value: unknown, label: string): string {
 }
 function settings(value: Record<string, unknown>, label: string): Settings {
   const result: Settings = {};
-  for (const key of ["title", "outputDir"] as const)
+  for (const key of ["title"] as const)
     if (value[key] !== undefined)
       result[key] = text(value[key], label + "." + key);
   if (value.duration !== undefined) {
@@ -103,42 +102,26 @@ export async function readConfig(path: string): Promise<RecorderConfig> {
   }
 }
 export function configuredOptions(
-  options: ReturnType<typeof parseOptions>,
   config: RecorderConfig,
   room: ConfigRoom,
+  outputDir: string,
   now = new Date(),
 ) {
   const settings = { ...config.defaults, ...room };
-  const override = options.overrides;
   const name =
     room.name
       .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
       .replace(/[. ]+$/, "")
       .slice(0, 80) || room.id;
   return {
-    ...options,
     url: room.url,
-    title: override.title ?? settings.title ?? room.name,
-    duration: override.duration ?? settings.duration,
-    trim: override.trim ?? settings.trim ?? true,
-    padding: override.padding ?? (settings.padding ?? 5) * 1000,
-    out: override.out
-      ? resolve(override.out)
-      : resolve(
-          dirname(options.config),
-          settings.outputDir || "recordings",
-          `${name}-${now.toISOString().replace(/[:.]/g, "-")}.ccreplay`,
-        ),
+    title: settings.title || room.name,
+    duration: settings.duration ?? 86400,
+    trim: settings.trim ?? true,
+    padding: (settings.padding ?? 5) * 1000,
+    out: resolve(
+      outputDir,
+      `${name}-${now.toISOString().replace(/[:.]/g, "-")}.ccreplay`,
+    ),
   };
-}
-export function chooseRoom(
-  config: RecorderConfig,
-  selection: string,
-): ConfigRoom | undefined {
-  return (
-    config.rooms.find((room) => room.id === selection.trim()) ||
-    (/^[1-9]\d*$/.test(selection.trim())
-      ? config.rooms[Number(selection.trim()) - 1]
-      : undefined)
-  );
 }

@@ -1,6 +1,6 @@
 import { discoverRoomRuntime } from "./room-runtime.ts";
 import type { RoomEvent } from "../src/replay/types.ts";
-import type { ReduxStore } from "./types.ts";
+import type { ReduxStore } from "./capture-types.ts";
 import type { ExternalRecord } from "../src/core/types.ts";
 import { roomEventFilter } from "../src/core/room-events.ts";
 import { isScriptResource } from "../src/core/resource-policy.ts";
@@ -11,9 +11,8 @@ import { pickState, pickMessages } from "../src/core/model.ts";
   if (window.__ccReplayRecorder) return;
   window.__ccReplayRecorder = true;
   let stopAll: (() => void) | null;
-  window.addEventListener("ccreplay-start", (event) => {
+  window.addEventListener("ccreplay-start", () => {
     if (stopAll) return;
-    const channel = event.detail.channel;
     const started = Date.now();
     const time = () => Date.now() - started;
     let batch: ExternalRecord[] = [];
@@ -23,12 +22,7 @@ import { pickState, pickMessages } from "../src/core/model.ts";
     };
     const flush = () => {
       if (batch.length) {
-        if (window.__ccReplaySink) window.__ccReplaySink(batch);
-        else
-          window.postMessage(
-            { source: "ccreplay", channel, batch },
-            location.origin,
-          );
+        window.__ccReplaySink?.(batch);
         batch = [];
       }
     };

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { isReplayAsset, replayWarnings } from "../src/core/resource-policy.ts";
-import { createStyleCollector } from "../extension/capture-styles.ts";
+import { createStyleCollector } from "../recorder/capture-styles.ts";
 
 test("script warnings are excluded while genuine missing images and BGM remain visible", () => {
   const warnings = [

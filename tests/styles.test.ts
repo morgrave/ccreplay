@@ -7,7 +7,7 @@ import {
   readArchive,
 } from "../src/core/archive.ts";
 import { collectCSS, rewriteCSS, rewriteSrcset } from "../src/core/css.ts";
-import { createStyleCollector } from "../extension/capture-styles.ts";
+import { createStyleCollector } from "../recorder/capture-styles.ts";
 const el = (
   tagName: string,
   id: number,

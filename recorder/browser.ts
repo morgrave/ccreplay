@@ -1,5 +1,5 @@
-import "../extension/recorder.ts";
-import { discoverRoomRuntime } from "../extension/room-runtime.ts";
+import "./capture.ts";
+import { discoverRoomRuntime } from "./room-runtime.ts";
 import type { ExternalRecord } from "../src/core/types.ts";
 
 declare global {
@@ -93,7 +93,7 @@ window.__ccReplayAuto = {
   },
   start() {
     window.dispatchEvent(
-      new CustomEvent("ccreplay-start", { detail: { channel: "headless" } }),
+      new CustomEvent("ccreplay-start"),
     );
   },
   async stop() {

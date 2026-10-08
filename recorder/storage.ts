@@ -37,6 +37,16 @@ export class RecordingStore {
   private queue: { url: string; kind?: string }[] = [];
   private jobs = new Set<Promise<void>>();
   private bytes = 0;
+  private savedCount = 0;
+  private failedCount = 0;
+  stats() {
+    return {
+      assets: this.savedCount,
+      assetErrors: this.failedCount,
+      pendingAssets: this.queue.length + this.jobs.size,
+      bytes: this.bytes,
+    };
+  }
   private journalBytes = 0;
   private failure?: unknown;
   private writes = Promise.resolve();
@@ -152,7 +162,9 @@ export class RecordingStore {
       const id = hash(bytes);
       await writeFile(join(this.directory, "assets", id), bytes);
       saved = { url, hash: id, mime, size: bytes.length };
+      this.savedCount++;
     } catch (error) {
+      this.failedCount++;
       saved = {
         url,
         error: error instanceof Error ? error.message : String(error),

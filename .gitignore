@@ -42,3 +42,6 @@ yarn-error.log*
 
 /public/library/.import-lock
 /public/library/index.json.next
+
+/desktop-dist/
+/release/

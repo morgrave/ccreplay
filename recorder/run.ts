@@ -1,10 +1,9 @@
 import { chromium } from "playwright";
-import { build } from "esbuild";
-import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { RecordingStore, exportSession } from "./storage.ts";
 import { prepareChatTabs } from "./chat.ts";
+import { CaptureProgress, type RecorderProgress } from "./progress.ts";
 import type { ExternalRecord } from "../src/core/types.ts";
 
 export interface RecordOptions {
@@ -16,6 +15,10 @@ export interface RecordOptions {
   padding?: number;
   signal: AbortSignal;
   log?: (message: string) => void;
+  /** Prebuilt capture hook and bundled Chromium for the desktop distribution. */
+  captureScript: string;
+  executablePath?: string;
+  onProgress?: (progress: RecorderProgress) => void;
 }
 
 export async function recordRoom(options: RecordOptions) {
@@ -29,7 +32,7 @@ export async function recordRoom(options: RecordOptions) {
   );
   if (exists)
     throw Error(
-      "출력 파일이 이미 있습니다. 다른 --out 경로를 지정하세요: " + options.out,
+      "출력 파일이 이미 있습니다. 다른 파일 이름을 지정하세요: " + options.out,
     );
   const log = options.log || console.log;
   const store = new RecordingStore(options.out + ".session", {
@@ -39,16 +42,19 @@ export async function recordRoom(options: RecordOptions) {
   });
   await store.init();
   log("복구용 기록 폴더: " + store.directory);
-  const bundle = await build({
-    entryPoints: [fileURLToPath(new URL("./browser.ts", import.meta.url))],
-    bundle: true,
-    format: "iife",
-    write: false,
-    minify: true,
-  });
+  const captureScript = await readFile(options.captureScript, "utf8");
+  const progress = new CaptureProgress();
+  const report = (phase: RecorderProgress["phase"]) =>
+    options.onProgress?.({
+      ...progress.snapshot(),
+      ...store.stats(),
+      phase,
+    });
+  report("connecting");
   const browser = await chromium.launch({
     headless: true,
-    // Finish the recorder's final batch before closing Chromium on Ctrl+C.
+    executablePath: options.executablePath,
+    // The host owns shutdown so the final journal batch is acknowledged first.
     handleSIGINT: false,
     handleSIGTERM: false,
     handleSIGHUP: false,
@@ -78,8 +84,6 @@ export async function recordRoom(options: RecordOptions) {
   let chatTimer: ReturnType<typeof setInterval> | undefined;
   let chatTask: Promise<void> | undefined;
   const chatController = new AbortController();
-  let batchCount = 0;
-  let recordCount = 0;
   const binding = "__ccReplayWrite_" + randomUUID().replaceAll("-", "");
   try {
     options.signal.addEventListener("abort", abort, { once: true });
@@ -99,8 +103,8 @@ export async function recordRoom(options: RecordOptions) {
           return;
         try {
           await store.append(records);
-          batchCount++;
-          recordCount += records.length;
+          for (const message of progress.observe(records)) log(message);
+          report("recording");
         } catch (error) {
           fail(error);
           throw error;
@@ -119,7 +123,7 @@ export async function recordRoom(options: RecordOptions) {
     await page.evaluate(
       `window.__ccReplayWrite = window[${JSON.stringify(binding)}];`,
     );
-    await page.evaluate(bundle.outputFiles[0].text);
+    await page.evaluate(captureScript);
     await page.waitForFunction(() => window.__ccReplayAuto.ready(), undefined, {
       timeout: 60000,
       polling: 500,
@@ -153,6 +157,8 @@ export async function recordRoom(options: RecordOptions) {
     if (options.signal.aborted) throw Error("기록 시작 전에 종료되었습니다.");
     await page.evaluate(() => window.__ccReplayAuto.start());
     started = true;
+    progress.start();
+    report("recording");
     chatTimer = setInterval(() => {
       if (!chatTask && !chatController.signal.aborted) {
         chatTask = prepareChats(chatController.signal)
@@ -163,7 +169,7 @@ export async function recordRoom(options: RecordOptions) {
       }
     }, 30000);
     log(
-      "기록 중 · Enter 또는 Ctrl+C로 종료하고 저장합니다." +
+      "기록 중 · ‘종료하고 저장’ 버튼으로 마칩니다." +
         (options.duration ? ` · ${options.duration}초 후 자동 종료` : ""),
     );
     // A navigation destroys the capture hook. Preserve the partial session instead of silently losing time.
@@ -175,11 +181,9 @@ export async function recordRoom(options: RecordOptions) {
       if (started) fail(Error("방 페이지가 닫혔습니다."));
     });
     if (options.duration) timer = setTimeout(finish, options.duration * 1000);
-    status = setInterval(
-      () => log(`기록 중 · 수신 ${recordCount}개 · 저장 ${batchCount}회`),
-      30000,
-    );
+    status = setInterval(() => report("recording"), 1000);
     await finished;
+    progress.stop();
     chatController.abort();
     await chatTask;
     try {
@@ -198,8 +202,14 @@ export async function recordRoom(options: RecordOptions) {
     options.signal.removeEventListener("abort", abort);
     await browser.close();
   }
+  report("saving");
   log("남은 자산을 저장하고 리플레이를 만드는 중…");
-  await store.finish();
+  const savingTimer = setInterval(() => report("saving"), 1000);
+  try {
+    await store.finish();
+  } finally {
+    clearInterval(savingTimer);
+  }
   if (fatal)
     await store.append([
       {
@@ -224,6 +234,7 @@ export async function recordRoom(options: RecordOptions) {
     log(
       `앞뒤 정리: ${(data.trim.sourceDuration / 1000).toFixed(1)}초 → ${(data.duration / 1000).toFixed(1)}초 · 앞 ${(data.trim.start / 1000).toFixed(1)}초 / 뒤 ${((data.trim.sourceDuration - data.trim.end) / 1000).toFixed(1)}초 제거`,
     );
+  report("complete");
   if (fatal)
     throw Error(
       "기록이 중단되어 부분 리플레이를 저장했습니다: " +
