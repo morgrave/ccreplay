@@ -165,17 +165,18 @@ export function pickMessages(
     .map(([id, m]) => ({
       id,
       name: str(m.name, 300),
-      text: m.removed
-        ? ""
-        : m.extend?.roll?.secret && m.from !== uid
+      // CCfolia marks paginated messages and documents evicted from its latest-50
+      // listener as `removed`. Its chat still displays them; this is not a tombstone.
+      text:
+        m.extend?.roll?.secret && m.from !== uid
           ? "Secret dice 🎲"
           : str(m.text, 100000),
       channel: str(m.channel, 200),
       channelName: str(m.channelName || m.channel, 200),
       iconUrl: safeMediaURL(m.iconUrl),
-      imageUrl: m.removed ? "" : safeMediaURL(m.imageUrl),
+      imageUrl: safeMediaURL(m.imageUrl),
       color: /^#[a-f\d]{3,8}$/i.test(m.color) ? m.color : "#d8dbe1",
-      removed: !!m.removed,
+      removed: false,
       edited: !!m.edited,
       private:
         !!m.to ||

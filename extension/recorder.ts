@@ -97,11 +97,16 @@ import { pickState, pickMessages } from "../src/core/model.ts";
         for (const m of messages) {
           const encoded = JSON.stringify(m);
           if (lastMessages.get(m.id) !== encoded) {
+            const initial =
+              !capturedInitialMessages ||
+              (!lastMessages.has(m.id) &&
+                m.createdAt > 0 &&
+                m.createdAt <= started);
             lastMessages.set(m.id, encoded);
             push("message", {
               ...m,
-              t: capturedInitialMessages ? time() : 0,
-              ...(!capturedInitialMessages ? { initial: true } : {}),
+              t: initial ? 0 : time(),
+              ...(initial ? { initial: true } : {}),
             });
             asset(m.iconUrl);
             asset(m.imageUrl);

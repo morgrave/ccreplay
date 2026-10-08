@@ -27,9 +27,11 @@ export function captureData(
     frames: records.filter(
       (r) => r.kind === "frame",
     ) as RecordingData["frames"],
-    messages: records.filter(
-      (r) => r.kind === "message",
-    ) as RecordingData["messages"],
+    messages: records
+      .filter((r) => r.kind === "message")
+      .sort(
+        (a, b) => a.t - b.t || (a.createdAt || 0) - (b.createdAt || 0),
+      ) as RecordingData["messages"],
     audio: records.filter((r) => r.kind === "audio") as RecordingData["audio"],
     events: records.filter((r) => r.kind === "event").map((r) => r.event),
     assets: [],

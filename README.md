@@ -90,6 +90,8 @@ npm run record -- https://ccfolia.com/rooms/ewqvsiQk4 --title "엔딩 이후" --
 
 초기 방 데이터와 화면이 준비된 다음 기록을 시작합니다. 수신한 변경은 `.ccreplay.session/records.ndjson`에 순서대로 계속 저장하고, 자산은 동시 다운로드 4개로 제한합니다. 결과 파일과 복구 폴더가 기본 저장되는 `recordings/`는 Git에서 제외됩니다. 기존 파일과 세션 폴더는 덮어쓰지 않습니다. 중간에 프로세스가 강제 종료됐다면 다음 명령으로 마지막 저장 시점까지 복구합니다.
 
+메인·정보·잡담·사용자 정의 공개 탭의 새 메시지는 선택된 탭과 무관하게 코코포리아의 방 전체 구독에서 계속 수집합니다. 시작 전 각 공개 탭을 한 번 준비해 원본 앱이 제공하는 초기 과거 대화(기본 20개 이상 또는 그 탭의 전체 메시지가 더 적으면 전부)도 확보합니다. 기록 중 새로 추가된 공개 탭은 30초마다 확인해 초기 대화를 준비합니다. 오래된 대화가 늦게 도착해도 녹화 시작 전에 작성됐다면 0초의 초기 대화로 저장합니다. 과거 메시지가 최신 50개 구독 범위 밖으로 밀려났다는 이유만으로 리플레이에서 삭제하지 않습니다. 모든 과거 로그를 무제한 다운로드하는 기능은 아닙니다.
+
 ```powershell
 npm run record -- --recover recordings/ending.ccreplay.session --out recordings/ending-recovered.ccreplay
 npm run library:import -- recordings/ending.ccreplay --campaign "페리아의 문장" --title "엔딩 이후"

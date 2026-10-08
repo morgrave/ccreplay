@@ -4,6 +4,7 @@ import { build } from "esbuild";
 import { chromium } from "playwright";
 import { captureData } from "../../src/core/capture.ts";
 import { trimIdleEdges } from "../../src/core/trim.ts";
+import { prepareChatTabs } from "../../recorder/chat.ts";
 import type { ExternalRecord } from "../../src/core/types.ts";
 
 test("headless capture observes initial chat, token changes, new chat and BGM without an extension", async () => {
@@ -59,6 +60,24 @@ test("headless capture observes initial chat, token changes, new chat and BGM wi
       write: false,
     });
     await page.evaluate(bundle.outputFiles[0].text);
+    const prepared = new Set<string>();
+    const controller = new AbortController();
+    await prepareChatTabs(page, prepared, () => {}, controller.signal);
+    assert.deepEqual([...prepared], ["main", "info", "other", "qa"]);
+    assert.equal(
+      await page.evaluate(() => window.__ccReplayAuto.chatStatus().selected),
+      "main",
+    );
+    await page.evaluate(() =>
+      (window as unknown as ExternalRecord).__addPublicFixtureTab(),
+    );
+    await prepareChatTabs(page, prepared, () => {}, controller.signal);
+    assert.ok(prepared.has("later"));
+    assert.ok(!prepared.has("private"));
+    assert.equal(
+      await page.evaluate(() => window.__ccReplayAuto.chatStatus().selected),
+      "main",
+    );
     assert.equal(
       await page.evaluate(() => window.__ccReplayAuto.ready()),
       true,
@@ -73,12 +92,34 @@ test("headless capture observes initial chat, token changes, new chat and BGM wi
     );
     await page.waitForTimeout(150);
     await page.evaluate(() =>
+      (window as unknown as ExternalRecord).__editUnselectedChats(),
+    );
+    await page.evaluate(() =>
       (window as unknown as ExternalRecord).__fixtureAudio.pause(),
     );
     await page.evaluate(() => window.__ccReplayAuto.stop());
     const data = captureData(records, { startedAt: Date.now() });
     assert.equal(data.messages.find((m) => m.id === "initial")!.t, 0);
     assert.ok(data.messages.find((m) => m.id === "new")!.t > 0);
+    for (const channel of ["info", "other", "qa"]) {
+      assert.ok(
+        data.messages.some(
+          (m) => m.id === channel && m.text === "new in " + channel,
+        ),
+      );
+      assert.ok(
+        data.messages.some(
+          (m) => m.id === channel && m.text === "edited " + channel,
+        ),
+      );
+    }
+    assert.ok(!data.messages.some((m) => m.channel === "private"));
+    assert.equal(data.messages.find((m) => m.id === "history")!.t, 0);
+    assert.equal(
+      data.messages.find((m) => m.id === "history")!.text,
+      "older chat loaded later",
+    );
+    assert.ok(!data.messages.some((m) => m.id === "new" && m.removed));
     assert.equal(data.frames[0].tokens[0].x, 0);
     assert.equal(data.frames.at(-1)!.tokens[0].x, 100);
     assert.ok(data.events.some((e) => e.type === 2));

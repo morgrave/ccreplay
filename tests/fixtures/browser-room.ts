@@ -2,9 +2,24 @@ import type { ExternalRecord } from "../../src/core/types.ts";
 
 const runtime = window as unknown as ExternalRecord;
 const state: ExternalRecord = {
+  app: { state: { roomChatTab: "main" } },
   entities: {
     rooms: {
-      entities: { test: { name: "Test", messageChannels: ["main"] } },
+      entities: {
+        test: {
+          name: "Test",
+          messageChannels: ["main", "info", "other"],
+          messageGroups: [
+            { id: "qa", name: "QA", kind: "public" },
+            {
+              id: "private",
+              name: "hidden",
+              kind: "private",
+              uids: ["someone"],
+            },
+          ],
+        },
+      },
     },
     roomCharacters: {
       entities: {
@@ -37,6 +52,35 @@ const store = {
 (
   document.querySelector("#root") as unknown as ExternalRecord
 ).__reactFiber$fixture = { memoizedProps: { store } };
+const tabs = document.createElement("div");
+tabs.role = "tablist";
+document.querySelector("#root")!.append(tabs);
+const addTab = (channel: string) => {
+  const button = document.createElement("button");
+  button.textContent = channel;
+  // Sortable CCfolia tabs carry their channel in React props, not a DOM id.
+  (button as unknown as ExternalRecord).__reactFiber$fixture = {
+    memoizedProps: {},
+    return: { memoizedProps: { value: channel } },
+  };
+  button.onclick = () => {
+    state.app.state.roomChatTab = channel;
+    state.app.state.roomChatChannelLoaded ||= {};
+    state.app.state.roomChatChannelLoaded[channel] = true;
+    for (const fn of listeners) fn();
+  };
+  tabs.append(button);
+};
+for (const channel of ["main", "info", "other", "qa", "private"])
+  addTab(channel);
+runtime.__addPublicFixtureTab = () => {
+  state.entities.rooms.entities.test.messageGroups.push({
+    id: "later",
+    name: "Later",
+    kind: "public",
+  });
+  addTab("later");
+};
 runtime.__updateFixture = () => {
   state.entities.roomCharacters.entities.token.x = 100;
   state.entities.roomMessages.entities.new = {
@@ -45,6 +89,20 @@ runtime.__updateFixture = () => {
     channel: "main",
   };
   document.querySelector("[data-field-object]")!.textContent = "changed scene";
+  for (const channel of ["info", "other", "qa", "private"]) {
+    state.entities.roomMessages.entities[channel] = {
+      name: "NPC",
+      text: "new in " + channel,
+      channel,
+    };
+  }
+  state.entities.roomMessages.entities.history = {
+    name: "NPC",
+    text: "older chat loaded later",
+    channel: "info",
+    removed: true,
+    createdAt: { seconds: 1 },
+  };
   for (const fn of listeners) fn();
 };
 runtime.__startFixtureAudio = async () => {
@@ -52,4 +110,10 @@ runtime.__startFixtureAudio = async () => {
   audio.loop = true;
   runtime.__fixtureAudio = audio;
   await audio.play();
+};
+runtime.__editUnselectedChats = () => {
+  for (const channel of ["info", "other", "qa"])
+    state.entities.roomMessages.entities[channel].text = "edited " + channel;
+  state.entities.roomMessages.entities.new.removed = true;
+  for (const fn of listeners) fn();
 };

@@ -9,6 +9,14 @@ declare global {
       ready(): boolean;
       start(): void;
       stop(): Promise<void>;
+      chatStatus(): {
+        selected: string;
+        channels: string[];
+        loading: Record<string, boolean>;
+        loaded: Record<string, boolean>;
+        counts: Record<string, number>;
+      };
+      selectChat(channel: string): boolean;
     };
   }
 }
@@ -22,6 +30,59 @@ window.__ccReplaySink = (batch) => {
     });
 };
 window.__ccReplayAuto = {
+  selectChat(channel) {
+    for (const button of document.querySelectorAll<HTMLButtonElement>(
+      '[role="tablist"] button',
+    )) {
+      if (button.disabled) continue;
+      let value = button.id;
+      const key = Object.keys(button).find((key) =>
+        key.startsWith("__reactFiber$"),
+      );
+      let fiber = key ? (button as unknown as ExternalRecord)[key] : undefined;
+      for (let depth = 0; fiber && depth < 12; depth++, fiber = fiber.return) {
+        if (typeof fiber.memoizedProps?.value === "string") {
+          value = fiber.memoizedProps.value;
+          break;
+        }
+      }
+      if (value === channel) {
+        button.click();
+        return true;
+      }
+    }
+    return false;
+  },
+  chatStatus() {
+    const state = discoverRoomRuntime().store?.getState();
+    const room =
+      state?.entities?.rooms?.entities?.[location.pathname.split("/")[2]];
+    const channels = [
+      ...new Set<string>([
+        "main",
+        "info",
+        "other",
+        ...(room?.messageChannels || []),
+        ...(room?.messageGroups || [])
+          .filter((g: ExternalRecord) => g.kind === "public")
+          .map((g: ExternalRecord) => String(g.id)),
+      ]),
+    ];
+    const counts: Record<string, number> = {};
+    for (const message of Object.values<ExternalRecord>(
+      state?.entities?.roomMessages?.entities || {},
+    )) {
+      if (!message.to && channels.includes(message.channel))
+        counts[message.channel] = (counts[message.channel] || 0) + 1;
+    }
+    return {
+      selected: state?.app?.state?.roomChatTab || "main",
+      channels,
+      counts,
+      loading: state?.app?.state?.roomChatChannelLoading || {},
+      loaded: state?.app?.state?.roomChatChannelLoaded || {},
+    };
+  },
   ready() {
     const store = discoverRoomRuntime().store;
     const id = location.pathname.split("/")[2];

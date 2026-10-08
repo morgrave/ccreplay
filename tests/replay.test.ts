@@ -130,7 +130,7 @@ test("messages enforce recipient, channel membership and secret dice visibility"
       text: "SENSITIVE DICE",
       extend: { roll: { secret: true } },
     },
-    removed: { channel: "main", text: "secret deleted", removed: true },
+    removed: { channel: "main", text: "older visible message", removed: true },
   };
   const result = pickMessages(s, "room", true);
   assert.deepEqual(
@@ -138,7 +138,15 @@ test("messages enforce recipient, channel membership and secret dice visibility"
     ["public", "mine", "joined", "secret", "removed"],
   );
   assert.equal(result.find((x) => x.id === "secret")!.text, "Secret dice 🎲");
-  assert.equal(result.find((x) => x.id === "removed")!.text, "");
+  assert.equal(
+    result.find((x) => x.id === "removed")!.text,
+    "older visible message",
+  );
+  assert.equal(
+    result.find((x) => x.id === "removed")!.removed,
+    false,
+    "CCfolia's removed flag also denotes paginated history, not a deletion",
+  );
   assert(!JSON.stringify(result).includes("SENSITIVE"));
   assert(!JSON.stringify(result).includes("third"));
 });

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CC Replay Recorder",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "minimum_chrome_version": "116",
   "description": "열린 코코포리아 방의 장면, 토큰, 채팅, BGM을 로컬 리플레이 파일에 기록합니다.",
   "permissions": [

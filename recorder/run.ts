@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
 import { RecordingStore, exportSession } from "./storage.ts";
+import { prepareChatTabs } from "./chat.ts";
 import type { ExternalRecord } from "../src/core/types.ts";
 
 export interface RecordOptions {
@@ -74,6 +75,9 @@ export async function recordRoom(options: RecordOptions) {
   };
   let timer: ReturnType<typeof setTimeout> | undefined;
   let status: ReturnType<typeof setInterval> | undefined;
+  let chatTimer: ReturnType<typeof setInterval> | undefined;
+  let chatTask: Promise<void> | undefined;
+  const chatController = new AbortController();
   let batchCount = 0;
   let recordCount = 0;
   const binding = "__ccReplayWrite_" + randomUUID().replaceAll("-", "");
@@ -128,9 +132,36 @@ export async function recordRoom(options: RecordOptions) {
       ]),
     );
     await page.waitForTimeout(2000);
+    const preparedChannels = new Set<string>();
+    const warnedChannels = new Set<string>();
+    const prepareChats = async (signal: AbortSignal) => {
+      try {
+        await prepareChatTabs(page, preparedChannels, log, signal);
+      } catch (error) {
+        if (signal.aborted) return;
+        const text =
+          "채팅 탭 초기 대화 준비 실패 (새 메시지 수집은 계속됩니다): " +
+          (error instanceof Error ? error.message : String(error));
+        if (!warnedChannels.has(text)) {
+          warnedChannels.add(text);
+          log(text);
+          await store.append([{ kind: "warning", text }]);
+        }
+      }
+    };
+    await prepareChats(options.signal);
     if (options.signal.aborted) throw Error("기록 시작 전에 종료되었습니다.");
     await page.evaluate(() => window.__ccReplayAuto.start());
     started = true;
+    chatTimer = setInterval(() => {
+      if (!chatTask && !chatController.signal.aborted) {
+        chatTask = prepareChats(chatController.signal)
+          .catch(fail)
+          .finally(() => {
+            chatTask = undefined;
+          });
+      }
+    }, 30000);
     log(
       "기록 중 · Enter 또는 Ctrl+C로 종료하고 저장합니다." +
         (options.duration ? ` · ${options.duration}초 후 자동 종료` : ""),
@@ -149,6 +180,8 @@ export async function recordRoom(options: RecordOptions) {
       30000,
     );
     await finished;
+    chatController.abort();
+    await chatTask;
     try {
       await page.evaluate(() => window.__ccReplayAuto.stop());
     } catch (error) {
@@ -160,6 +193,8 @@ export async function recordRoom(options: RecordOptions) {
     started = false;
     if (timer) clearTimeout(timer);
     if (status) clearInterval(status);
+    if (chatTimer) clearInterval(chatTimer);
+    chatController.abort();
     options.signal.removeEventListener("abort", abort);
     await browser.close();
   }
