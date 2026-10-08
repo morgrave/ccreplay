@@ -139,6 +139,7 @@ test("progressive episodes return media URLs before downloading media; export st
   const base =
     "https://raw.githubusercontent.com/user/repo/revision/public/library/";
   const requests: string[] = [];
+  const progress: { bytes: number; phase: string }[] = [];
   const original = globalThis.fetch;
   try {
     globalThis.fetch = async (url) => {
@@ -149,11 +150,22 @@ test("progressive episodes return media URLs before downloading media; export st
     const result = await loadEpisode(
       base,
       prepared.patch.episode,
-      undefined,
+      (bytes, phase) => progress.push({ bytes, phase }),
       undefined,
       { progressive: true },
     );
     assert.deepEqual(requests, [prepared.patch.episode.manifest]);
+    assert.deepEqual(progress.at(-1), {
+      bytes: prepared.patch.episode.bytes,
+      phase: "preparing",
+    });
+    assert.ok(
+      progress.some(
+        (p) =>
+          p.phase === "recording" && p.bytes === prepared.patch.episode.bytes,
+      ),
+    );
+    assert.ok(!progress.some((p) => p.phase === "assets"));
     assert.equal(result.assetOrigin, "https://raw.githubusercontent.com");
     assert(
       result.assets.get("https://test/music")?.startsWith(base + "assets/"),

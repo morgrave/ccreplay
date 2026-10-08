@@ -139,13 +139,22 @@ export function mountLibrary({
         const record = await loadEpisode(
           base,
           e,
-          (bytes) => {
+          (bytes, phase) => {
             if (request !== navSerial) return;
-            const total = e.assetBytes || 0;
-            progress.value = total ? Math.min(1, bytes / total) : 0;
-            episodeStatus(
-              `이 에피소드의 자산 ${mb(bytes)}${total ? " / " + mb(total) : ""} 불러오는 중…`,
-            );
+            if (phase === "recording") {
+              const total = e.bytes;
+              progress.value = total ? Math.min(1, bytes / total) : 0;
+              episodeStatus(
+                `에피소드 기록 ${mb(bytes)}${total ? " / " + mb(total) : ""} 다운로드 중…`,
+              );
+            } else {
+              progress.removeAttribute("value");
+              episodeStatus(
+                phase === "preparing"
+                  ? "기록 데이터를 준비하는 중… 이미지와 음악은 화면에서 필요한 시점에 불러옵니다."
+                  : `화면 준비에 필요한 자산 ${mb(bytes)} 다운로드 중…`,
+              );
+            }
           },
           controller.signal,
           { progressive: true },

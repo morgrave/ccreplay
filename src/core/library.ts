@@ -231,7 +231,11 @@ export async function unpackPatch(bytes: Uint8Array<ArrayBuffer>) {
   delete files["patch.json"];
   return { patch, files };
 }
-async function responseBytes(r: Response, limit: number) {
+async function responseBytes(
+  r: Response,
+  limit: number,
+  onProgress?: (bytes: number) => void,
+) {
   // Fetch decodes Content-Encoding before exposing the body. Content-Length
   // describes the encoded transfer, which may be larger than a small asset.
   // Enforce the limit on decoded stream bytes instead.
@@ -247,6 +251,7 @@ async function responseBytes(r: Response, limit: number) {
       throw Error("파일 크기가 한도를 넘습니다.");
     }
     chunks.push(value);
+    onProgress?.(size);
   }
   const bytes = new Uint8Array(size);
   let offset = 0;
@@ -326,7 +331,10 @@ export function libraryAssetLoader(
 export async function loadEpisode(
   baseURL: string | URL,
   episode: Episode,
-  onProgress?: (bytes: number) => void,
+  onProgress?: (
+    bytes: number,
+    phase: "recording" | "assets" | "preparing",
+  ) => void,
   signal?: AbortSignal,
   options: { progressive?: boolean } = {},
 ) {
@@ -338,34 +346,37 @@ export async function loadEpisode(
   signal?.throwIfAborted();
   const r = await fetch(new URL(episode.manifest, baseURL), { signal });
   if (!r.ok) throw Error("에피소드 기록을 불러오지 못했습니다.");
-  return readArchive(
-    new File(
-      [await responseBytes(r, 95 * 1024 * 1024)],
-      episode.id + ".ccreplay",
-    ),
-    {
-      loadAsset: libraryAssetLoader(baseURL, onProgress, signal),
-      signal,
-      assetOrigin: options.progressive ? new URL(baseURL).origin : undefined,
-      assetURL: options.progressive
-        ? (asset) => {
-            // Single-part content-addressed objects can be streamed by the browser.
-            // Multi-part objects still require verified assembly before use.
-            if (!Array.isArray(asset.parts) || asset.parts.length !== 1)
-              return undefined;
-            const part = asset.parts[0];
-            if (
-              !hashPattern.test(asset.sha256 || "") ||
-              part.hash !== asset.sha256 ||
-              !Number.isSafeInteger(part.size) ||
-              part.size < 0 ||
-              part.size > CHUNK_SIZE ||
-              part.size !== asset.size
-            )
-              throw Error("자산 조각 정보가 올바르지 않습니다.");
-            return new URL("assets/" + part.hash, baseURL).href;
-          }
-        : undefined,
-    },
+  onProgress?.(0, "recording");
+  const bytes = await responseBytes(r, 95 * 1024 * 1024, (bytes) =>
+    onProgress?.(bytes, "recording"),
   );
+  onProgress?.(bytes.length, "preparing");
+  return readArchive(new File([bytes], episode.id + ".ccreplay"), {
+    loadAsset: libraryAssetLoader(
+      baseURL,
+      (bytes) => onProgress?.(bytes, "assets"),
+      signal,
+    ),
+    signal,
+    assetOrigin: options.progressive ? new URL(baseURL).origin : undefined,
+    assetURL: options.progressive
+      ? (asset) => {
+          // Single-part content-addressed objects can be streamed by the browser.
+          // Multi-part objects still require verified assembly before use.
+          if (!Array.isArray(asset.parts) || asset.parts.length !== 1)
+            return undefined;
+          const part = asset.parts[0];
+          if (
+            !hashPattern.test(asset.sha256 || "") ||
+            part.hash !== asset.sha256 ||
+            !Number.isSafeInteger(part.size) ||
+            part.size < 0 ||
+            part.size > CHUNK_SIZE ||
+            part.size !== asset.size
+          )
+            throw Error("자산 조각 정보가 올바르지 않습니다.");
+          return new URL("assets/" + part.hash, baseURL).href;
+        }
+      : undefined,
+  });
 }
