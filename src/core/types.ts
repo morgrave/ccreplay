@@ -4,6 +4,7 @@ import type { ChatMessage, RoomEvent, Camera } from "../replay/types.ts";
 // from the typed recording format used by the player and shared-asset library.
 export type ExternalRecord = Record<string, any>;
 export interface AudioEvent {
+  initial?: boolean;
   id: string;
   t: number;
   url: string;
@@ -60,6 +61,8 @@ export interface Token {
   status: { label: string; value: string | number; max: string | number }[];
 }
 export interface Frame {
+  /** False for initial subscription/DOM hydration; omitted in legacy files. */
+  activity?: boolean;
   t: number;
   room: ExternalRecord;
   tokens: Token[];

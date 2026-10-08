@@ -154,6 +154,30 @@ export async function recordRoom(options: RecordOptions) {
       }
     };
     await prepareChats(options.signal);
+    log("초기 방 데이터와 공개 채팅 구독이 안정될 때까지 기다리는 중…");
+    let preparationKey = "",
+      stableSince = Date.now();
+    const preparationDeadline = Date.now() + 30000;
+    while (
+      Date.now() - stableSince < 2000 &&
+      Date.now() < preparationDeadline
+    ) {
+      options.signal.throwIfAborted();
+      const next = await page.evaluate(() =>
+        window.__ccReplayAuto.preparationKey(),
+      );
+      if (next !== preparationKey) {
+        preparationKey = next;
+        stableSince = Date.now();
+      }
+      await page.waitForTimeout(250);
+    }
+    if (Date.now() - stableSince < 2000) {
+      const text =
+        "초기 구독 안정화가 30초 안에 끝나지 않았습니다. 수신된 상태부터 기록합니다.";
+      log(text);
+      await store.append([{ kind: "warning", text }]);
+    }
     if (options.signal.aborted) throw Error("기록 시작 전에 종료되었습니다.");
     await page.evaluate(() => window.__ccReplayAuto.start());
     started = true;

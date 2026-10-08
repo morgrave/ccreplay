@@ -1,11 +1,13 @@
 import "./capture.ts";
 import { discoverRoomRuntime } from "./room-runtime.ts";
+import { pickMessages } from "../src/core/model.ts";
 import type { ExternalRecord } from "../src/core/types.ts";
 
 declare global {
   interface Window {
     __ccReplayWrite: (batch: ExternalRecord[]) => Promise<void>;
     __ccReplayAuto: {
+      preparationKey(): string;
       ready(): boolean;
       start(): void;
       stop(): Promise<void>;
@@ -30,6 +32,16 @@ window.__ccReplaySink = (batch) => {
     });
 };
 window.__ccReplayAuto = {
+  preparationKey() {
+    const s = discoverRoomRuntime().store?.getState();
+    const id = location.pathname.split("/")[2];
+    return JSON.stringify([
+      s?.entities?.rooms?.entities?.[id],
+      s?.entities?.roomCharacters?.entities,
+      s?.entities?.roomItems?.entities,
+      s ? pickMessages(s, id) : [],
+    ]);
+  },
   selectChat(channel) {
     for (const button of document.querySelectorAll<HTMLButtonElement>(
       '[role="tablist"] button',
@@ -92,9 +104,7 @@ window.__ccReplayAuto = {
     );
   },
   start() {
-    window.dispatchEvent(
-      new CustomEvent("ccreplay-start"),
-    );
+    window.dispatchEvent(new CustomEvent("ccreplay-start"));
   },
   async stop() {
     window.dispatchEvent(new Event("ccreplay-stop"));

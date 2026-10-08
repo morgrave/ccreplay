@@ -82,7 +82,14 @@ test("headless capture observes initial chat, token changes, new chat and BGM wi
       await page.evaluate(() => window.__ccReplayAuto.ready()),
       true,
     );
+    await page.evaluate(() =>
+      (window as unknown as ExternalRecord).__prepareLatePanel(),
+    );
     await page.evaluate(() => window.__ccReplayAuto.start());
+    await page.waitForTimeout(100);
+    await page.evaluate(() =>
+      (window as unknown as ExternalRecord).__hydrateLatePanel(),
+    );
     await page.waitForTimeout(100);
     await page.evaluate(() =>
       (window as unknown as ExternalRecord).__updateFixture(),
@@ -115,6 +122,7 @@ test("headless capture observes initial chat, token changes, new chat and BGM wi
     }
     assert.ok(!data.messages.some((m) => m.channel === "private"));
     assert.equal(data.messages.find((m) => m.id === "history")!.t, 0);
+    assert.equal(data.messages.find((m) => m.id === "numericHistory")!.t, 0);
     assert.equal(
       data.messages.find((m) => m.id === "history")!.text,
       "older chat loaded later",
@@ -122,6 +130,21 @@ test("headless capture observes initial chat, token changes, new chat and BGM wi
     assert.ok(!data.messages.some((m) => m.id === "new" && m.removed));
     assert.equal(data.frames[0].tokens[0].x, 0);
     assert.equal(data.frames.at(-1)!.tokens[0].x, 100);
+    assert.ok(
+      data.frames.some(
+        (frame) =>
+          frame.t > 0 &&
+          frame.items.some((item) => item.id === "oldPanel") &&
+          frame.activity === false,
+      ),
+      "Delayed panel rendering must remain an initial baseline",
+    );
+    assert.ok(
+      data.frames.some(
+        (frame) => frame.tokens[0].x === 100 && frame.activity === true,
+      ),
+      "Actual token movement must count as activity",
+    );
     assert.ok(data.events.some((e) => e.type === 2));
     assert.ok(data.events.some((e) => e.type === 3));
     assert.ok(data.audio.some((a) => a.paused === false));

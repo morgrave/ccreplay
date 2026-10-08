@@ -31,6 +31,57 @@ function longSession(): RecordingData {
     ],
   };
 }
+
+test("late initial panels, history and startup audio are baselines; padding follows the actual conversation", () => {
+  const source = longSession();
+  source.duration = 300000;
+  source.frames[0].activity = false;
+  source.frames.push({
+    ...source.frames[0],
+    t: 40000,
+    items: [{ id: "panel", imageUrl: "https://ccfolia.com/image" }],
+    activity: false,
+  });
+  source.messages.push({
+    ...source.messages[0],
+    id: "history",
+    t: 0,
+    initial: true,
+  });
+  source.audio.push({
+    ...source.audio[0],
+    t: 50000,
+    position: 0,
+    initial: true,
+  });
+  source.messages.push({
+    ...source.messages[0],
+    id: "new",
+    t: 120000,
+    initial: false,
+    text: "session starts",
+  });
+  source.messages.push({
+    ...source.messages[0],
+    id: "last",
+    t: 180000,
+    initial: false,
+    text: "session ends",
+  });
+  const result = trimIdleEdges(source, 5000);
+  assert.equal(result.trim!.start, 115000);
+  assert.equal(result.trim!.end, 185000);
+  assert.equal(result.duration, 70000);
+  assert.equal(result.trim!.activityCount, 2);
+  assert.equal(result.frames[0].items[0].id, "panel");
+  assert.equal(result.messages.find((m) => m.id === "new")!.t, 5000);
+  source.messages = source.messages.filter((m) => m.initial);
+  const still = trimIdleEdges(source, 5000);
+  assert.equal(still.trim!.activityCount, 0);
+  assert.equal(still.trim!.start, 50000);
+  assert.equal(still.duration, 5000);
+  assert.equal(still.frames[0].items[0].id, "panel");
+});
 test("24-hour recording trims to four hours of activity with padding and preserves interior gaps", () => {
   const source = longSession();
   const hour = 3600000;

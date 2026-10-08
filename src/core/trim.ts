@@ -65,7 +65,13 @@ export function trimIdleEdges(
   let previousFrame: string | undefined;
   for (const frame of source.frames) {
     const value = frameValue(frame);
-    if (previousFrame !== undefined && value !== previousFrame) add(frame.t);
+    if (
+      frame.activity === true ||
+      (frame.activity !== false &&
+        previousFrame !== undefined &&
+        value !== previousFrame)
+    )
+      add(frame.t);
     previousFrame = value;
   }
   const messages = new Map<string, string>();
@@ -81,17 +87,30 @@ export function trimIdleEdges(
     const old = audio.get(event.id);
     // The first paused/initial player is a baseline, not a session action.
     if (
-      old !== undefined
+      !event.initial &&
+      (old !== undefined
         ? old !== value
-        : !event.paused && !event.stopped && event.t > 1000
+        : !event.paused && !event.stopped && event.t > 1000)
     )
       add(event.t);
     audio.set(event.id, value);
   }
-  const start = activityCount ? Math.max(0, first - padding) : 0;
+  // Late initial hydration is a baseline, not an action. Do not trim back into
+  // incomplete initialization, including when saving a short replay with no actions.
+  let baseline = 0;
+  for (const f of source.frames)
+    if (f.activity === false && (!activityCount || f.t < first))
+      baseline = Math.max(baseline, f.t);
+  for (const a of source.audio)
+    if (a.initial && (!activityCount || a.t < first))
+      baseline = Math.max(baseline, a.t);
+  baseline = Math.min(source.duration, baseline);
+  const start = activityCount
+    ? Math.max(baseline, first - padding, 0)
+    : baseline;
   const end = activityCount
     ? Math.min(source.duration, last + padding)
-    : Math.min(source.duration, padding);
+    : Math.min(source.duration, start + padding);
   const startedAt = source.startedAt || 0;
   const initialFrame = frameAt(source.frames, start);
   const frames = [

@@ -7,6 +7,7 @@ import { isScriptResource } from "../src/core/resource-policy.ts";
 import { record } from "@rrweb/record";
 import { createStyleCollector } from "./capture-styles.ts";
 import { pickState, pickMessages } from "../src/core/model.ts";
+import { RoomActivity } from "./activity.ts";
 (() => {
   if (window.__ccReplayRecorder) return;
   window.__ccReplayRecorder = true;
@@ -14,6 +15,7 @@ import { pickState, pickMessages } from "../src/core/model.ts";
   window.addEventListener("ccreplay-start", () => {
     if (stopAll) return;
     const started = Date.now();
+    const activity = new RoomActivity(started);
     const time = () => Date.now() - started;
     let batch: ExternalRecord[] = [];
     const push = (kind: string, data: ExternalRecord) => {
@@ -35,6 +37,25 @@ import { pickState, pickMessages } from "../src/core/model.ts";
       for (const playerClass of runtime.classes) classes.add(playerClass);
     }
     discover();
+    const initialRoom =
+      store?.getState()?.entities?.rooms?.entities?.[roomId] || {};
+    const initialAudioURLs = new Set(
+      [initialRoom.mediaUrl, initialRoom.soundUrl].filter(Boolean),
+    );
+    const audioConfig = () => {
+      const r = store?.getState()?.entities?.rooms?.entities?.[roomId] || {};
+      return JSON.stringify([
+        r.mediaUrl,
+        r.mediaRef,
+        r.mediaVolume,
+        r.mediaRepeat,
+        r.soundUrl,
+        r.soundRef,
+        r.soundVolume,
+        r.soundRepeat,
+      ]);
+    };
+    const initialAudioConfig = audioConfig();
     if (!store) {
       push("warning", {
         t: 0,
@@ -80,10 +101,15 @@ import { pickState, pickMessages } from "../src/core/model.ts";
           };
         }
         const frame = pickState(s, roomId, visibleItems);
+        const meaningful = activity.observe(s, roomId);
         const { view: ignoredView, ...roomFrame } = frame;
         const encoded = JSON.stringify(roomFrame);
-        if (encoded !== lastState) {
-          push("frame", { t: lastState ? time() : 0, ...roomFrame });
+        if (encoded !== lastState || meaningful) {
+          push("frame", {
+            t: lastState ? time() : 0,
+            ...roomFrame,
+            activity: meaningful,
+          });
           lastState = encoded;
           findAssets(roomFrame);
         }
@@ -156,7 +182,15 @@ import { pickState, pickMessages } from "../src/core/model.ts";
         active.add(key);
         let entry = players.get(key);
         if (!entry) {
-          entry = { id: "audio-" + nextId++, last: null, player };
+          entry = {
+            id: "audio-" + nextId++,
+            last: null,
+            player,
+            initializing:
+              initialAudioURLs.has(a.currentSrc || a.src) &&
+              audioConfig() === initialAudioConfig &&
+              (a.autoplay || a.readyState < 2),
+          };
           players.set(key, entry);
         }
         entry.player = player;
@@ -164,6 +198,10 @@ import { pickState, pickMessages } from "../src/core/model.ts";
         asset(url);
         const value = {
           t: time(),
+          initial:
+            audioConfig() === initialAudioConfig &&
+            initialAudioURLs.has(url) &&
+            (!entry.last || entry.initializing),
           id: entry.id,
           url,
           position: Number.isFinite(a.currentTime) ? a.currentTime : 0,
@@ -177,6 +215,11 @@ import { pickState, pickMessages } from "../src/core/model.ts";
               ),
           rate: a.playbackRate,
         };
+        if (
+          (a.readyState >= 2 && (!a.paused || !a.autoplay)) ||
+          audioConfig() !== initialAudioConfig
+        )
+          entry.initializing = false;
         const old = entry.last;
         const expected = old
           ? old.position +

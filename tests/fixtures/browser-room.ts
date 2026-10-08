@@ -81,6 +81,30 @@ runtime.__addPublicFixtureTab = () => {
   });
   addTab("later");
 };
+runtime.__prepareLatePanel = () => {
+  state.entities.roomItems = {
+    entities: {
+      oldPanel: {
+        active: true,
+        imageUrl: "https://ccfolia.com/test.png",
+        x: 0,
+        y: 0,
+        width: 4,
+        height: 4,
+        updatedAt: 1,
+      },
+    },
+  };
+};
+runtime.__hydrateLatePanel = () => {
+  const panel = document.createElement("div");
+  panel.dataset.fieldObject = "oldPanel";
+  const image = document.createElement("img");
+  image.src = "https://ccfolia.com/test.png";
+  panel.append(image);
+  document.querySelector("#root")!.append(panel);
+  for (const fn of listeners) fn();
+};
 runtime.__updateFixture = () => {
   state.entities.roomCharacters.entities.token.x = 100;
   state.entities.roomMessages.entities.new = {
@@ -102,6 +126,12 @@ runtime.__updateFixture = () => {
     channel: "info",
     removed: true,
     createdAt: { seconds: 1 },
+  };
+  state.entities.roomMessages.entities.numericHistory = {
+    name: "NPC",
+    text: "old numeric timestamp",
+    channel: "info",
+    createdAt: 1,
   };
   for (const fn of listeners) fn();
 };

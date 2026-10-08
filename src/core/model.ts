@@ -184,7 +184,10 @@ export function pickMessages(
           (g: ExternalRecord) => g.id === m.channel && g.kind === "private",
         ),
       createdAt:
-        num(m.createdAt?.seconds) * 1000 + num(m.createdAt?.nanoseconds) / 1e6,
+        typeof m.createdAt === "number"
+          ? num(m.createdAt)
+          : num(m.createdAt?.seconds) * 1000 +
+            num(m.createdAt?.nanoseconds) / 1e6,
     }));
 }
 export function frameAt<T extends { t: number }>(
