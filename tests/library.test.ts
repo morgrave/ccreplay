@@ -115,7 +115,9 @@ test("leaving an episode aborts loading before requesting the next asset", async
         loadEpisode(
           "https://user.github.io/repo/library/",
           prepared.patch.episode,
-          () => controller.abort(),
+          (_bytes, phase) => {
+            if (phase === "assets") controller.abort();
+          },
           controller.signal,
         ),
       { name: "AbortError" },
