@@ -18,7 +18,7 @@ npm run dev
 2. `main` 또는 `master` 브랜치에 푸시합니다. 테스트 → 라이브러리 무결성 검사 → 빌드 → Pages 배포가 자동 실행됩니다.
 3. 이후 코드나 `public/library` 변경을 푸시하면 다시 배포됩니다. Actions의 수동 실행도 지원합니다.
 
-Pages에는 앱과 기록기만 배포합니다. 목록·에피소드·공용 자산·미리보기는 `https://raw.githubusercontent.com/<owner>/<repo>/<배포 커밋>/public/`에서 직접 읽습니다. Actions가 `CCREPLAY_DATA_BASE`를 설정하며, 커밋 주소에 고정해 목록과 자산의 버전이 섞이지 않게 합니다. `dist`에는 라이브러리나 미리보기 기록을 복사하지 않습니다. 로컬 서버에서는 `public`의 데이터를 직접 제공합니다.
+Pages에는 앱과 기록기만 배포합니다. 목록·에피소드·공용 자산는 `https://raw.githubusercontent.com/<owner>/<repo>/<배포 커밋>/public/`에서 직접 읽습니다. Actions가 `CCREPLAY_DATA_BASE`를 설정하며, 커밋 주소에 고정해 목록과 자산의 버전이 섞이지 않게 합니다. `dist`에는 라이브러리 기록을 복사하지 않습니다. 로컬 서버에서는 `public`의 데이터를 직접 제공합니다.
 
 기본 브랜치 이름이 다르면 workflow의 `branches: [main, master]`을 수정하세요. 별도 PAT/배포 비밀키는 필요하지 않습니다. 자동 배포에는 GitHub의 기본 `GITHUB_TOKEN`과 Pages OIDC를 사용합니다. 저장소 하위 경로(`https://user.github.io/repository/`)에서도 작동하도록 파일 경로는 상대 경로, 화면 탐색은 URL hash를 사용합니다. [GitHub 공식 설정 안내](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
 

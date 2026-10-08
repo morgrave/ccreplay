@@ -15,9 +15,9 @@ import {
   readArchive,
   sanitizeEvents,
 } from "../src/core/archive.ts";
-import { demoRecording, demoSound } from "../src/core/demo.ts";
+import { fixtureRecording, fixtureSound } from "./fixtures/recording.ts";
 test("seeking backwards restores token position and HP at that time", () => {
-  const d = demoRecording();
+  const d = fixtureRecording();
   assert.equal(frameAt(d.frames, 60000)!.tokens[0].status[1].value, 56);
   assert.equal(frameAt(d.frames, 10000)!.tokens[0].status[1].value, 58);
   assert.equal(frameAt(d.frames, 0)!.t, 0);
@@ -143,8 +143,8 @@ test("messages enforce recipient, channel membership and secret dice visibility"
   assert(!JSON.stringify(result).includes("third"));
 });
 test("archive round-trip embeds BGM bytes and retains events", async () => {
-  const d = demoRecording(),
-    audio = demoSound();
+  const d = fixtureRecording(),
+    audio = fixtureSound();
   d.assets = [
     {
       url: "demo:audio",
@@ -165,7 +165,7 @@ test("archive round-trip embeds BGM bytes and retains events", async () => {
 });
 test("malformed archives and future versions fail explicitly", async () => {
   await assert.rejects(() => readArchive(new File(["bad"], "bad.ccreplay")));
-  const d = demoRecording();
+  const d = fixtureRecording();
   d.version = 100;
   assert.throws(() => validateRecording(d), /지원하지/);
   d.version = 1;

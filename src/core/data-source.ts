@@ -1,4 +1,4 @@
-/** Library and preview data live outside the Pages application bundle. */
+/** Library data lives outside the Pages application bundle. */
 export function dataURL(path: string): URL {
   const configured = document.querySelector<HTMLMetaElement>(
     'meta[name="ccreplay-data-base"]',

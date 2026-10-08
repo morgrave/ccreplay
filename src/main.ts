@@ -1,16 +1,15 @@
 import { registerReplayTools } from "./replay/tools.ts";
-import { dataURL } from "./core/data-source.ts";
 import type { RoomEvent } from "./replay/types.ts";
 import type { eventWithTime } from "@rrweb/types";
 import { errorMessage } from "./core/errors.ts";
-import type { Recording, Frame, Token, ExternalRecord } from "./core/types.ts";
+import type { Recording, Token } from "./core/types.ts";
 import type { Camera } from "./replay/types.ts";
 import { TokenTooltip } from "./replay/tooltip.ts";
 import { bindTimeline } from "./replay/timeline.ts";
 import { RoomChat } from "./replay/chat.ts";
 import { bindRoomControls } from "./core/room-controls.ts";
 import { roomEventFilter } from "./core/room-events.ts";
-import { cameraLayers, applyCamera } from "./core/free-view.ts";
+import { applyCamera } from "./core/free-view.ts";
 
 import { Replayer } from "@rrweb/replay";
 import "@rrweb/replay/dist/style.css";
@@ -19,7 +18,6 @@ import { $, $$, ic, paintIcons, shell } from "./shell.ts";
 import {
   frameAt,
   messagesAt,
-  audioAt,
   timeLabel,
   escapeHTML as esc,
   clamp,
@@ -30,7 +28,6 @@ import {
   downloadBlob,
   sanitizeEvents,
 } from "./core/archive.ts";
-import { demoRecording, demoSound } from "./core/demo.ts";
 import { AudioEngine } from "./core/audio.ts";
 import { mountLibrary } from "./library-ui.ts";
 const tokenTooltip = new TokenTooltip();
@@ -44,15 +41,11 @@ let current: Recording | undefined,
   speed = 1,
   volume = 0.7,
   tab = "chat",
-  mode = "scene",
   query = "",
   selected: string | null = null,
   last = 0,
   renderStamp = 0,
-  chatStamp = 0,
-  frameKey: Frame | null | undefined,
-  zoom = 1,
-  pan = { x: 0, y: 0 };
+  chatStamp = 0;
 shell();
 const notify = (message: string) => {
   $("#notice").textContent = message;
@@ -78,43 +71,6 @@ function dialog(title: string, html: string) {
 }
 const stats = (t: Token) =>
   `<span class="token-stats">${(t.status || []).map((s) => `<span>${esc(s.label)}<b>${esc(s.value)}<small> / ${esc(s.max)}</small></b></span>`).join("")}</span>`;
-function renderScene(force = false) {
-  if (replayer) return;
-  const f = frameAt(current?.data.frames || [], time);
-  if (!f) {
-    $("#world").innerHTML =
-      '<span class="no-state">장면 상태가 없습니다. 기록 파일을 확인하세요.</span>';
-    return;
-  }
-  if (frameKey === f && !force) return;
-  frameKey = f;
-  const cell = clamp(f.cellSize, 8, 200) || 24;
-  const width = clamp(f.room.fieldWidth, 1, 500) * cell,
-    height = clamp(f.room.fieldHeight, 1, 500) * cell;
-  $("#board-backdrop").style.backgroundImage = url(f.room.backgroundUrl)
-    ? `url("${url(f.room.backgroundUrl)}")`
-    : "";
-  $("#world").innerHTML =
-    `<div class="map-field ${f.room.displayGrid ? "grid" : ""} ${!url(f.room.backgroundUrl) && !url(f.room.foregroundUrl) ? "no-image" : ""}" style="left:${-Math.floor(f.room.fieldWidth / 2) * cell}px;top:${-Math.floor(f.room.fieldHeight / 2) * cell}px;width:${width}px;height:${height}px;--cell:${cell * clamp(f.room.gridSize || 1, 0.25, 20)}px;background-color:${color(f.room.backgroundColor)};background-image:${url(f.room.backgroundUrl) ? `url(&quot;${url(f.room.backgroundUrl)}&quot;)` : "none"}">${url(f.room.foregroundUrl) ? `<img class="field-image" src="${url(f.room.foregroundUrl)}" style="object-fit:${f.room.fieldObjectFit === "cover" ? "cover" : "fill"}" alt="기록된 전경">` : ""}</div>${f.items.map((i) => `<button class="board-item" style="left:${clamp(i.x, -1e5, 1e5)}px;top:${clamp(i.y, -1e5, 1e5)}px;width:${clamp(i.width, 0.1, 500) * cell}px;height:${clamp(i.height, 0.1, 500) * cell}px;z-index:${clamp(i.z, 0, 500)};transform:rotate(${clamp(i.angle, -3600, 3600)}deg)" title="${esc(i.text)}">${url(i.imageUrl) ? `<img src="${url(i.imageUrl)}" alt="${esc(i.text || "패널")}">` : `<span>${esc(i.text || "이미지 없음")}</span>`}</button>`).join("")}${f.tokens.map((c) => `<button class="token ${selected === c.id ? "selected-token" : ""}" data-token="${esc(c.id)}" aria-label="${esc(c.name)} 토큰 정보" style="left:${clamp(c.x, -1e5, 1e5)}px;top:${clamp(c.y, -1e5, 1e5)}px;width:${clamp(c.width, 0.1, 100) * cell}px;height:${clamp(c.height, 0.1, 100) * cell}px;--token-color:${color(c.color)};z-index:${600 + clamp(c.z, 0, 100)}"><span class="token-art" style="transform:rotate(${clamp(c.angle, -3600, 3600)}deg)">${url(c.iconUrl) ? `<img src="${url(c.iconUrl)}" alt="">` : `<span>${esc((c.name || "?").slice(0, 1))}</span>`}</span><span class="token-label">${esc(c.name)}</span></button>`).join("")}`;
-  $("#token-count").textContent = String(f.tokens.length);
-  $("#scene-name").textContent = current!.data.demo
-    ? time < 45000
-      ? "새벽의 플랫폼"
-      : "불이 켜진 역무실"
-    : "기록된 장면";
-  $("#scene-hint").textContent = current!.data.demo
-    ? "체험용 예시 · 토큰을 가리켜 보세요"
-    : "드래그로 시점 이동 · 토큰을 가리켜 정보 확인";
-  fitWorld();
-}
-function fitWorld() {
-  const f = frameAt(current?.data.frames || [], time);
-  if (!f) return;
-  const view = f.view || { scale: 1, x: 0, y: 0 };
-  const scale = clamp(view.scale || 1, 0.05, 10) * zoom;
-  $("#world").style.transform =
-    `translate(${pan.x + (view.x || 0)}px,${pan.y + (view.y || 0)}px) scale(${scale})`;
-}
 function renderInspector() {
   if (!current) return;
   $("#search-wrap").hidden = tab !== "chat";
@@ -127,6 +83,9 @@ function renderInspector() {
       content.scrollHeight - content.scrollTop - content.clientHeight < 60;
   const all = messagesAt(current!.data.messages, current!.data.duration);
   $("#chat-count").textContent = String(all.length);
+  $("#token-count").textContent = String(
+    frameAt(current.data.frames, time)?.tokens.length || 0,
+  );
   if (tab === "chat") {
     const list = query
       ? all.filter((m) =>
@@ -172,17 +131,6 @@ function renderTransport() {
   $("#seek").setAttribute("aria-valuetext", timeLabel(time));
   $("#time-label").innerHTML =
     `${timeLabel(time)} <span>/ ${timeLabel(current!.data.duration)}</span>`;
-  $(".audio-bars").classList.toggle("playing", playing);
-  const active = audioAt(current!.data.audio, time).filter((a) => !a.paused);
-  const names = frameAt(current!.data.frames, time)
-    ?.bgm.filter((b) => b.url)
-    .map((b) => b.name || "이름 없는 음원");
-  $("#bgm-name").textContent = active.length
-    ? names?.join(" + ") || `기록된 음원 ${active.length}개`
-    : "재생 중인 BGM 없음";
-  $("#bgm-detail").textContent = active.length
-    ? `${active.length} TRACK${active.length > 1 ? "S" : ""} · ${playing ? "PLAYING" : "PAUSED"}`
-    : "BGM FILE SYNC";
 }
 function buttonState() {
   $("#play").innerHTML = ic(playing ? "pause" : "play");
@@ -217,7 +165,6 @@ function pause() {
 }
 function seek(next: number) {
   time = clamp(next, 0, current?.data.duration || 0);
-  renderScene();
   renderInspector();
   renderTransport();
   engine?.sync(time, playing, speed, volume);
@@ -236,23 +183,13 @@ function toggle() {
   buttonState();
 }
 function setupRoomView() {
-  const next = replayer ? "free" : "scene";
-  if (next === "free" && !replayer) return;
   pause();
   if (!freeCamera) freeCamera = { x: 0, y: 0, scale: 1 };
-  mode = next;
-  zoom = 1;
-  pan = { x: 0, y: 0 };
   if (replayer) applyCamera(replayer.iframe.contentDocument!, freeCamera);
   $("#replay-page").classList.toggle("room-render", !!replayer);
-  $("#replay-page").classList.toggle("free-mode", mode === "free");
-  $("#replay-page").classList.toggle("reference", !!current?.data.reference);
+  $("#replay-page").classList.add("free-mode");
   $("#replay-page").classList.remove("inspect-open");
-  $("#board").hidden = !!replayer;
   $("#original").hidden = !replayer;
-  $(".scene-label").hidden = true;
-  $("#scene-hint").hidden = true;
-  $("#token-tooltip").hidden = true;
   $("#dom-replay").hidden = false;
   $("#replay-interaction").hidden = false;
   syncOriginal(true);
@@ -399,6 +336,12 @@ function showInspector(nextTab?: string) {
   renderInspector();
 }
 async function load(recording: Recording, show = true) {
+  if (!recording.data.events.some((event) => event.type === 2)) {
+    recording.release();
+    throw Error(
+      "방 상태 기록이 없는 파일입니다. 현재 기록기로 만든 리플레이를 선택하세요.",
+    );
+  }
   pause();
   engine?.stop();
   replayer?.destroy();
@@ -408,10 +351,6 @@ async function load(recording: Recording, show = true) {
   time = 0;
   selected = null;
   freeCamera = null;
-  mode = "scene";
-  frameKey = null;
-  zoom = 1;
-  pan = { x: 0, y: 0 };
   query = "";
   $("#search").value = "";
   $("#dom-replay").innerHTML = "";
@@ -426,19 +365,7 @@ async function load(recording: Recording, show = true) {
       notify(m);
     }
   });
-  $("#session-title").textContent = d.title || "코코포리아 세션";
-  $("#eyebrow").textContent = d.demo
-    ? "DEMO SESSION · 예시 기록"
-    : "SESSION ARCHIVE";
-  $("#session-meta").textContent =
-    `${new Date(d.startedAt || Date.now()).toLocaleDateString("ko-KR")} · ${timeLabel(d.duration)} · ${d.frames.length.toLocaleString()}개 장면 기록`;
-  $("#sample-badge").textContent = d.demo ? "체험용 예시" : "불러오기 완료";
   $("#seek").max = String(d.duration);
-  $("#duration-label").textContent = timeLabel(d.duration);
-  $("#ruler").innerHTML = Array.from(
-    { length: 5 },
-    (_, i) => `<span>${timeLabel((d.duration * i) / 4)}</span>`,
-  ).join("");
   $("#event-marks").innerHTML = d.messages
     .filter((m) => m.t > 0)
     .slice(0, 3000)
@@ -483,30 +410,12 @@ async function load(recording: Recording, show = true) {
   }
   setupRoomView();
   if (show) page("replay");
-  seek(d.demo ? 15000 : 0);
+  seek(0);
   notify(
     d.warnings?.length
       ? `저장 주의 ${d.warnings.length}건 · “보관된 파일 확인”에서 자세히 볼 수 있어요.`
       : "",
   );
-}
-async function demo() {
-  const d = demoRecording(),
-    blob = demoSound(),
-    link = URL.createObjectURL(blob);
-  d.assets = [
-    {
-      url: "demo:audio",
-      path: "assets/demo",
-      mime: "audio/wav",
-      size: blob.size,
-    },
-  ];
-  await load({
-    data: d,
-    assets: new Map([["demo:audio", link]]),
-    release: () => URL.revokeObjectURL(link),
-  });
 }
 async function openFile(file?: File) {
   if (!file) return;
@@ -568,9 +477,8 @@ $("#file").onchange = (e) =>
   openFile((e.target as HTMLInputElement).files?.[0]);
 for (const id of ["open", "setup-open"])
   $("#" + id).onclick = () => $("#file").click();
-$("#replay-nav").onclick = () => page("replay");
+$("#replay-nav").onclick = () => (current ? page("replay") : library.back());
 $("#record-nav").onclick = () => page("record");
-$("#load-demo").onclick = demo;
 $("#play").onclick = toggle;
 $("#back").onclick = () => seek(time - 10000);
 $("#forward").onclick = () => seek(time + 10000);
@@ -604,20 +512,6 @@ $("#speed").onchange = (e) => {
   engine?.sync(time, playing, speed, volume);
   syncOriginal(true);
 };
-$("#volume").oninput = (e) => {
-  $("#master-volume").value = (e.target as HTMLInputElement).value;
-  volume = +(e.target as HTMLInputElement).value;
-  engine?.sync(time, playing, speed, volume);
-};
-$("#mute").onclick = () => {
-  volume = volume ? 0 : 0.7;
-  $("#volume").value = String(volume);
-  $("#master-volume").value = String(volume);
-  $("#mute").innerHTML = ic(volume ? "volume-2" : "volume-x");
-  $("#mute").setAttribute("aria-label", volume ? "음소거" : "음소거 해제");
-  engine?.sync(time, playing, speed, volume);
-  paintIcons();
-};
 $("#fullscreen").onclick = async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -627,7 +521,6 @@ $("#fullscreen").onclick = async () => {
   }
 };
 $("#export").onclick = exportCurrent;
-$("#asset-info").onclick = showAssets;
 $("#search").oninput = (e) => {
   query = (e.target as HTMLInputElement).value.trim();
   renderInspector();
@@ -670,7 +563,6 @@ $("#repair-file").onchange = (e) => {
     };
     engine?.stop();
     engine = new AudioEngine(current!.data, current!.assets, notify);
-    renderScene(true);
     $("#dialog").close();
     notify("파일을 연결했습니다. 저장 버튼으로 새 기록에 포함할 수 있어요.");
   }
@@ -686,21 +578,11 @@ $("#inspector-content").onclick = (e) => {
   );
   if (t) {
     selected = t.dataset.tokenSelect || null;
-    renderScene(true);
     renderInspector();
     const token = frameAt(current!.data.frames, time)?.tokens.find(
       (x) => x.id === selected,
     );
     if (token) dialog(token.name, `<p>${esc(token.memo)}</p>${stats(token)}`);
-  }
-};
-$("#world").onclick = (e) => {
-  const b = (e.target as HTMLInputElement).closest<HTMLElement>("[data-token]");
-  if (b) {
-    selected = b.dataset.token || null;
-    tab = "tokens";
-    renderInspector();
-    renderScene(true);
   }
 };
 function recordedIdAt(e: {
@@ -721,7 +603,6 @@ function recordedIdAt(e: {
 }
 function hideTokenTip() {
   tokenTooltip.hide();
-  $("#token-tooltip").hidden = true;
   replayer?.iframe?.contentDocument
     ?.getElementById("ccreplay-live-tooltip")
     ?.remove();
@@ -732,7 +613,7 @@ function hover(e: {
   clientY: number;
 }) {
   const b = (e.target as HTMLInputElement).closest<HTMLElement>(
-    "[data-token],[data-recorded],[data-field-object]",
+    "[data-recorded],[data-field-object]",
   );
   if (!b) {
     hideTokenTip();
@@ -741,7 +622,6 @@ function hover(e: {
   const f = frameAt(current!.data.frames, time);
   if (!f) return;
   const id =
-    b.dataset.token ||
     recordedIdAt(e) ||
     b.dataset.recorded ||
     b.getAttribute("data-field-object");
@@ -771,33 +651,6 @@ $("#replay-interaction").onclick = (e) => {
     if (selected) showInspector("tokens");
   }
 };
-$("#world").onpointermove = hover;
-$("#world").onpointerleave = () => ($("#token-tooltip").hidden = true);
-$("#world").addEventListener("focusin", (e) => {
-  const b = (e.target as HTMLInputElement).closest<HTMLElement>("[data-token]");
-  if (b) {
-    const r = b.getBoundingClientRect();
-    hover({ target: b, clientX: r.right, clientY: r.top });
-  }
-});
-$("#world").addEventListener(
-  "focusout",
-  () => ($("#token-tooltip").hidden = true),
-);
-let drag: { x: number; y: number; px: number; py: number } | null;
-$("#board").onpointerdown = (e) => {
-  if ((e.target as HTMLInputElement).closest<HTMLElement>("button")) return;
-  drag = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
-  $("#board").setPointerCapture(e.pointerId);
-};
-$("#board").onpointermove = (e) => {
-  if (drag) {
-    pan = { x: drag.px + e.clientX - drag.x, y: drag.py + e.clientY - drag.y };
-    fitWorld();
-  }
-};
-$("#board").onpointerup = () => (drag = null);
-$("#board").onpointercancel = () => (drag = null);
 document.addEventListener("keydown", (e) => {
   if (
     ["INPUT", "TEXTAREA", "SELECT"].includes(
@@ -836,14 +689,12 @@ document.addEventListener("drop", (e) => {
   openFile(e.dataTransfer?.files[0]);
 });
 new ResizeObserver(() => {
-  fitWorld();
   fitReplay();
 }).observe($("#stage"));
 function tick(now: number) {
   if (playing && current) {
     time = Math.min(current!.data.duration, time + (now - last) * speed);
     if (now - renderStamp > 80) {
-      renderScene();
       renderTransport();
       engine!.sync(time, true, speed, volume);
       syncOriginal();
@@ -885,9 +736,7 @@ window.addEventListener("pagehide", disposeReplayTools, { once: true });
 $("#close-chat").onclick = () => {
   $("#replay-page").classList.remove("inspect-open");
   $("#replay-page").classList.add("chat-closed");
-  fitWorld();
 };
-$("#chat-toggle").onclick = () => showInspector("chat");
 $("#inspect-toggle").onclick = () => {
   $("#replay-page").classList.contains("inspect-open")
     ? $("#replay-page").classList.remove("inspect-open")
@@ -897,88 +746,32 @@ $("#chat-settings").onclick = () => {
   showInspector("chat");
   $("#search").focus();
 };
-for (const id of ["more", "room-menu"])
-  $("#" + id).onclick = () =>
-    ($("#replay-menu").hidden = !$("#replay-menu").hidden);
+$("#more").onclick = () =>
+  ($("#replay-menu").hidden = !$("#replay-menu").hidden);
 $("#menu-assets").onclick = () => {
   $("#replay-menu").hidden = true;
   showAssets();
 };
-$("#load-demo").addEventListener(
-  "click",
-  () => ($("#replay-menu").hidden = true),
-);
 $("#help").addEventListener("click", () => ($("#replay-menu").hidden = true));
 document.addEventListener("click", (e) => {
   if (
-    !(e.target as HTMLInputElement).closest<HTMLElement>(
-      "#replay-menu,#more,#room-menu",
-    )
+    !(e.target as HTMLInputElement).closest<HTMLElement>("#replay-menu,#more")
   )
     $("#replay-menu").hidden = true;
 });
 if (matchMedia("(max-width:600px)").matches)
   $("#replay-page").classList.add("chat-closed");
 paintIcons();
-const initial = demoRecording();
-initial.title = "리플레이 파일을 열어주세요";
-initial.duration = 0;
-initial.demo = false;
-initial.frames = [
-  {
-    ...initial.frames[0],
-    t: 0,
-    room: {
-      ...initial.frames[0].room,
-      name: initial.title,
-      backgroundColor: "#202020",
-      backgroundUrl: "",
-      foregroundUrl: "",
-      fieldWidth: 40,
-      fieldHeight: 30,
-    },
-    tokens: [],
-    items: [],
-    bgm: [],
-  },
-];
-initial.messages = [];
-initial.audio = [];
-initial.events = [];
-initial.assets = [];
-load({ data: initial, assets: new Map(), release() {} }, false);
-
-fetch(dataURL("welcome.ccreplay"))
-  .then((r) => r.blob())
-  .then((blob) => readArchive(new File([blob], "welcome.ccreplay")))
-  .then((recording) => {
-    if (current!.data !== initial) return recording.release();
-    const meta = recording.data.events.find((e) => e.type === 4);
-    if (!meta) return recording.release();
-    meta.data.width = innerWidth;
-    meta.data.height = Math.max(
-      100,
-      innerHeight -
-        parseFloat(
-          getComputedStyle(document.documentElement).getPropertyValue("--dock"),
-        ),
-    );
-    return load(recording, false);
-  })
-  .catch(() => {});
-
 $("#volume-control").onclick = () =>
   ($("#volume-panel").hidden = !$("#volume-panel").hidden);
 $("#master-volume").oninput = (e) => {
   volume = +(e.target as HTMLInputElement).value;
-  $("#volume").value = String(volume);
   engine?.sync(time, playing, speed, volume);
 };
 
 const library = mountLibrary({
   load,
   pause,
-  showReplay: () => page("replay"),
   showRecord: () => page("record"),
   openFile: () => $("#file").click(),
 });

@@ -41,7 +41,6 @@ export interface RecordingData {
   reference?: boolean;
   sampleKind?: string;
   assetStorage?: string;
-  demo?: boolean;
   adapter?: boolean;
 }
 export interface Token {

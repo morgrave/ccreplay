@@ -1,5 +1,5 @@
-import type { RecordingData } from "./types.ts";
-export function demoRecording(): RecordingData {
+import type { RecordingData } from "../../src/core/types.ts";
+export function fixtureRecording(): RecordingData {
   const tokens = [
     {
       id: "yuna",
@@ -163,11 +163,10 @@ export function demoRecording(): RecordingData {
     events: [],
     assets: [],
     warnings: [],
-    demo: true,
     adapter: true,
   };
 }
-export function demoSound() {
+export function fixtureSound() {
   const rate = 16000;
   const length = rate * 6;
   const bytes = new ArrayBuffer(44 + length * 2);

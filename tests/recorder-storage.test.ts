@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import "fake-indexeddb/auto";
 import { readArchive } from "../src/core/archive.ts";
-import { demoRecording } from "../src/core/demo.ts";
+import { fixtureRecording } from "./fixtures/recording.ts";
 test("offscreen capture persists 150000 events, exports a valid archive, and protects unsaved data", async (t) => {
   let listener: (
       msg: ExternalRecord,
@@ -49,7 +49,7 @@ test("offscreen capture persists 150000 events, exports a valid archive, and pro
     session: { startedAt: Date.now() },
     roomUrl: "https://ccfolia.com/rooms/test",
   });
-  const frame = demoRecording().frames[0];
+  const frame = fixtureRecording().frames[0];
   const batch = [
     { kind: "asset", url: cdn },
     {

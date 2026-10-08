@@ -9,12 +9,7 @@ createServer(async (req, res) => {
       new URL(req.url || "/", "http://localhost").pathname,
     );
     const isLibrary = pathname.startsWith("/library/");
-    const isPreview = pathname === "/welcome.ccreplay";
-    const root = isLibrary
-      ? libraryRoot
-      : isPreview
-        ? resolve("public")
-        : buildRoot;
+    const root = isLibrary ? libraryRoot : buildRoot;
     const relative = isLibrary ? pathname.slice("/library".length) : pathname;
     const file = resolve(
       root,

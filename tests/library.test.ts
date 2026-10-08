@@ -9,9 +9,9 @@ import {
   patchBlob,
   unpackPatch,
 } from "../src/core/library.ts";
-import { demoRecording } from "../src/core/demo.ts";
+import { fixtureRecording } from "./fixtures/recording.ts";
 function recording(url: string, bytes: string) {
-  const data = demoRecording();
+  const data = fixtureRecording();
   data.assets = [
     { url, path: "assets/a", mime: "audio/wav", size: bytes.length },
   ];
