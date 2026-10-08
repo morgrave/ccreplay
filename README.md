@@ -79,10 +79,33 @@ Node.js 22 이상이 설치된 PC 또는 서버에서 실행합니다. 사람이
 ```powershell
 npm ci
 npm run record:install
-npm run record -- https://ccfolia.com/rooms/ewqvsiQk4 --title "엔딩 이후" --out recordings/ending.ccreplay
+npm run record
 ```
 
-**Enter 또는 Ctrl+C**를 한 번 누르면 기록을 종료하고 남은 자산 다운로드 후 파일을 저장합니다. 시간을 지정하려면 `--duration 3600`을 추가하세요(초 단위, 최대 24시간). 생략하면 직접 종료할 때까지 기록합니다. 전용 브라우저 설치는 처음 한 번만 필요하며, Linux 서버에서는 `npx playwright install --with-deps chromium`으로 OS 의존성도 설치할 수 있습니다.
+`npm run record`를 실행하면 루트의 **`record.config.json`**에 등록된 방 목록이 나타납니다. 번호나 id를 입력하면 선택한 방의 기록이 시작되고, `q` 또는 Ctrl+C로 선택을 취소합니다. 기본 설정에는 **페리아의 문장** 방과 제목 **엔딩 이후**가 등록되어 있습니다. 주소를 매번 입력할 필요 없이 `rooms` 배열에 다른 방을 추가하면 됩니다.
+
+```json
+{
+  "version": 1,
+  "defaults": { "duration": 86400, "trim": true, "padding": 5, "outputDir": "recordings" },
+  "rooms": [
+    { "id": "feria", "name": "페리아의 문장", "url": "https://ccfolia.com/rooms/ewqvsiQk4", "title": "엔딩 이후" }
+  ]
+}
+```
+
+`defaults`의 공통 설정을 각 방에서 덮어쓸 수 있으며, 명령줄 옵션이 가장 우선합니다. `duration`과 `padding`의 단위는 초입니다. 설정의 `duration`을 생략하면 직접 종료할 때까지 기록합니다. 기본 설정은 최대 24시간입니다. `outputDir`은 설정 파일 위치를 기준으로 해석하고, 파일 이름에는 방 이름과 실행 시각을 자동으로 붙입니다.
+
+```powershell
+npm run record -- --list
+npm run record -- --room feria
+npm run record -- --room feria --duration 3600 --title "다음 화"
+npm run record -- --config 다른설정.json
+```
+
+서버처럼 번호 선택 입력을 받을 수 없는 환경에서는 `--room feria`처럼 id를 지정합니다. 기존처럼 주소를 직접 지정하는 명령과 `--recover`도 계속 사용할 수 있습니다.
+
+**Enter 또는 Ctrl+C**를 한 번 누르면 기록을 종료하고 남은 자산 다운로드 후 파일을 저장합니다. 시간을 지정하려면 `--duration 3600`을 추가하세요(초 단위, 최대 24시간). 설정에서 방을 선택하면 설정의 기록 시간을 따르고, 주소를 직접 입력할 때 이 옵션을 생략하면 직접 종료할 때까지 기록합니다. 전용 브라우저 설치는 처음 한 번만 필요하며, Linux 서버에서는 `npx playwright install --with-deps chromium`으로 OS 의존성도 설치할 수 있습니다.
 
 저장할 때 **변화 없는 앞뒤 구간을 자동으로 잘라냅니다.** 토큰·패널·배경·채팅·BGM 설정 및 재생/정지/볼륨 변경을 활동으로 판단합니다. DOM 애니메이션, 주기적인 전체 화면 스냅샷, 음원 재생 위치의 자연스러운 진행·반복은 활동에 포함하지 않습니다. 첫 변화 앞과 마지막 변화 뒤에 기본 5초씩 남기며, 세션 중간의 휴식 시간은 유지합니다. `--padding 30`으로 여유 시간을 바꾸거나 `--no-trim`으로 전체 시간을 보존할 수 있습니다. 변화가 전혀 없으면 최초 5초의 방 상태만 저장합니다(`--padding 0`이면 정지 상태). 잘린 시작 시점의 토큰·채팅·BGM 위치와 화면 복원에 필요한 DOM 체크포인트를 함께 보존합니다.
 

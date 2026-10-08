@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "defaults": {
+    "duration": 86400,
+    "trim": true,
+    "padding": 5,
+    "outputDir": "recordings"
+  },
+  "rooms": [
+    {
+      "id": "feria",
+      "name": "페리아의 문장",
+      "url": "https://ccfolia.com/rooms/ewqvsiQk4",
+      "title": "엔딩 이후"
+    }
+  ]
+}
