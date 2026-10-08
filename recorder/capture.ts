@@ -8,6 +8,7 @@ import { record } from "@rrweb/record";
 import { createStyleCollector } from "./capture-styles.ts";
 import { pickState, pickMessages } from "../src/core/model.ts";
 import { RoomActivity } from "./activity.ts";
+import { RoomAudio } from "./room-audio.ts";
 (() => {
   if (window.__ccReplayRecorder) return;
   window.__ccReplayRecorder = true;
@@ -16,6 +17,7 @@ import { RoomActivity } from "./activity.ts";
     if (stopAll) return;
     const started = Date.now();
     const activity = new RoomActivity(started);
+    const roomAudio = new RoomAudio(started);
     const time = () => Date.now() - started;
     let batch: ExternalRecord[] = [];
     const push = (kind: string, data: ExternalRecord) => {
@@ -30,32 +32,11 @@ import { RoomActivity } from "./activity.ts";
     };
     const roomId = location.pathname.split("/")[2];
     let store: ReduxStore | undefined;
-    let classes = new Set<ExternalRecord>();
     function discover() {
       const runtime = discoverRoomRuntime();
       store = runtime.store;
-      for (const playerClass of runtime.classes) classes.add(playerClass);
     }
     discover();
-    const initialRoom =
-      store?.getState()?.entities?.rooms?.entities?.[roomId] || {};
-    const initialAudioURLs = new Set(
-      [initialRoom.mediaUrl, initialRoom.soundUrl].filter(Boolean),
-    );
-    const audioConfig = () => {
-      const r = store?.getState()?.entities?.rooms?.entities?.[roomId] || {};
-      return JSON.stringify([
-        r.mediaUrl,
-        r.mediaRef,
-        r.mediaVolume,
-        r.mediaRepeat,
-        r.soundUrl,
-        r.soundRef,
-        r.soundVolume,
-        r.soundRepeat,
-      ]);
-    };
-    const initialAudioConfig = audioConfig();
     if (!store) {
       push("warning", {
         t: 0,
@@ -93,6 +74,17 @@ import { RoomActivity } from "./activity.ts";
       if (!store) return;
       try {
         const s = store.getState();
+        for (const event of roomAudio.observeEffects(s.entities?.roomEffects?.entities || {}, time())) {
+          push("audio", event);
+          asset(event.url);
+        }
+        for (const event of roomAudio.observe(
+          s.entities?.rooms?.entities?.[roomId] || {},
+          time(),
+        )) {
+          push("audio", event);
+          asset(event.url);
+        }
         const visibleItems: Record<string, { imageUrl: string }> = {};
         for (const el of document.querySelectorAll("[data-field-object]")) {
           const img = el.querySelector("img");
@@ -157,133 +149,7 @@ import { RoomActivity } from "./activity.ts";
       attributes: true,
       attributeFilter: ["src", "style", "data-field-object"],
     });
-    const players = new Map<HTMLMediaElement, ExternalRecord>();
-    const nativeAudio = new Set<HTMLMediaElement>();
-    let nextId = 0;
-    const seenAudio = new WeakSet();
     const cleanup: (() => void)[] = [];
-    function captureAudio() {
-      const active = new Set();
-      const discovered = [...classes].flatMap((c) => c.players || []);
-      const known = new Set(discovered.map((p) => p.audioElement));
-      const list = [
-        ...discovered,
-        ...[
-          ...document.querySelectorAll<HTMLMediaElement>("audio,video"),
-          ...nativeAudio,
-        ]
-          .filter((a) => !known.has(a))
-          .map((a) => ({ audioElement: a })),
-      ];
-      for (const player of list) {
-        const a = player.audioElement;
-        if (!a || !/^https?:/.test(a.currentSrc || a.src)) continue;
-        const key = a;
-        active.add(key);
-        let entry = players.get(key);
-        if (!entry) {
-          entry = {
-            id: "audio-" + nextId++,
-            last: null,
-            player,
-            initializing:
-              initialAudioURLs.has(a.currentSrc || a.src) &&
-              audioConfig() === initialAudioConfig &&
-              (a.autoplay || a.readyState < 2),
-          };
-          players.set(key, entry);
-        }
-        entry.player = player;
-        const url = a.currentSrc || a.src;
-        asset(url);
-        const value = {
-          t: time(),
-          initial:
-            audioConfig() === initialAudioConfig &&
-            initialAudioURLs.has(url) &&
-            (!entry.last || entry.initializing),
-          id: entry.id,
-          url,
-          position: Number.isFinite(a.currentTime) ? a.currentTime : 0,
-          paused: a.paused || a.ended,
-          loop: a.loop,
-          volume: a.muted
-            ? 0
-            : Math.max(
-                0,
-                Math.min(1, player.gainNode?.gain?.value ?? a.volume),
-              ),
-          rate: a.playbackRate,
-        };
-        if (
-          (a.readyState >= 2 && (!a.paused || !a.autoplay)) ||
-          audioConfig() !== initialAudioConfig
-        )
-          entry.initializing = false;
-        const old = entry.last;
-        const expected = old
-          ? old.position +
-            ((value.t - old.t) / 1000) * (old.paused ? 0 : old.rate)
-          : 0;
-        if (
-          !old ||
-          old.url !== url ||
-          old.paused !== value.paused ||
-          old.loop !== value.loop ||
-          old.rate !== value.rate ||
-          Math.abs(old.volume - value.volume) > 0.008 ||
-          Math.abs(expected - value.position) > 0.12 ||
-          value.t - old.t >= 5000
-        ) {
-          push("audio", value);
-          entry.last = value;
-        }
-        if (!seenAudio.has(a)) {
-          seenAudio.add(a);
-          for (const type of [
-            "playing",
-            "pause",
-            "seeked",
-            "ratechange",
-            "volumechange",
-            "ended",
-          ]) {
-            const cb = () => captureAudio();
-            a.addEventListener(type, cb);
-            cleanup.push(() => a.removeEventListener(type, cb));
-          }
-        }
-      }
-      for (const [key, entry] of players) {
-        if (!active.has(key)) {
-          push("audio", { t: time(), id: entry.id, stopped: true });
-          players.delete(key);
-        }
-      }
-    }
-    const restores: (() => void)[] = [];
-    let discoveryPending = false;
-    for (const name of ["load", "play"] as const) {
-      const original = HTMLMediaElement.prototype[name];
-      function wrapped(this: HTMLMediaElement, ...args: []) {
-        nativeAudio.add(this);
-        captureAudio();
-        if (!discoveryPending) {
-          discoveryPending = true;
-          setTimeout(() => {
-            discoveryPending = false;
-            discover();
-            captureAudio();
-          }, 0);
-        }
-        return Reflect.apply(original, this, args);
-      }
-      Object.assign(HTMLMediaElement.prototype, { [name]: wrapped });
-      restores.push(() => {
-        if (HTMLMediaElement.prototype[name] === wrapped)
-          Object.assign(HTMLMediaElement.prototype, { [name]: original });
-      });
-    }
     const filterRoomEvent = roomEventFilter();
     const styles = createStyleCollector(asset, record.mirror, location.href);
     const rrstop = record({
@@ -313,7 +179,6 @@ import { RoomActivity } from "./activity.ts";
       "link[rel=stylesheet]",
     ))
       styles.resource(link.href, location.href, "stylesheet");
-    const poll = setInterval(captureAudio, 50);
     const discovery = setInterval(() => {
       discover();
       if (!unsubscribe && store) {
@@ -327,20 +192,17 @@ import { RoomActivity } from "./activity.ts";
       startedAt: started,
       title: document.title,
       captureMode: "room-state",
+      audioSource: "room-state-v1",
     });
-    captureAudio();
     flush();
     stopAll = () => {
       rrstop?.();
       unsubscribe?.();
       changes.disconnect();
-      clearInterval(poll);
       clearInterval(discovery);
       clearInterval(flusher);
-      restores.forEach((fn) => fn());
       cleanup.forEach((fn) => fn());
       snapshot();
-      captureAudio();
       push("end", { t: time() });
       flush();
       stopAll = null;

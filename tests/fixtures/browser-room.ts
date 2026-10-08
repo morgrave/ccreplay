@@ -136,10 +136,16 @@ runtime.__updateFixture = () => {
   for (const fn of listeners) fn();
 };
 runtime.__startFixtureAudio = async () => {
-  const audio = new Audio("https://ccfolia.com/test.wav");
-  audio.loop = true;
-  runtime.__fixtureAudio = audio;
-  await audio.play();
+  Object.assign(state.entities.rooms.entities.test, {
+    mediaUrl: "https://ccfolia.com/test.wav",
+    mediaRepeat: true,
+    mediaVolume: 0.5,
+  });
+  for (const fn of listeners) fn();
+};
+runtime.__stopFixtureAudio = () => {
+  state.entities.rooms.entities.test.mediaUrl = null;
+  for (const fn of listeners) fn();
 };
 runtime.__editUnselectedChats = () => {
   for (const channel of ["info", "other", "qa"])

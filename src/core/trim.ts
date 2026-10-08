@@ -90,7 +90,9 @@ export function trimIdleEdges(
       !event.initial &&
       (old !== undefined
         ? old !== value
-        : !event.paused && !event.stopped && event.t > 1000)
+        : !event.paused &&
+          !event.stopped &&
+          (event.initial === false || event.t > 1000))
     )
       add(event.t);
     audio.set(event.id, value);

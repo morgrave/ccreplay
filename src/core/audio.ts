@@ -25,6 +25,7 @@ export class AudioEngine {
   sync(time: number, playing: boolean, speed = 1, volume = 1) {
     const active = new Set();
     for (const event of audioAt(this.events, time)) {
+      if (event.paused) continue;
       const src = this.assets.get(event.url);
       if (!src) {
         if (!this.failed.has(event.url)) {
@@ -75,7 +76,11 @@ export class AudioEngine {
             } catch {}
         });
       }
-      if (playing && !event.paused && a.paused && !item.starting) {
+      const ended =
+        !event.loop &&
+        Number.isFinite(a.duration) &&
+        mediaPosition(event, time) >= a.duration;
+      if (playing && !ended && a.paused && !item.starting) {
         item.starting = true;
         a.play()
           .catch((e) => {

@@ -102,7 +102,7 @@ test("headless capture observes initial chat, token changes, new chat and BGM wi
       (window as unknown as ExternalRecord).__editUnselectedChats(),
     );
     await page.evaluate(() =>
-      (window as unknown as ExternalRecord).__fixtureAudio.pause(),
+      (window as unknown as ExternalRecord).__stopFixtureAudio(),
     );
     await page.evaluate(() => window.__ccReplayAuto.stop());
     const data = captureData(records, { startedAt: Date.now() });
@@ -149,6 +149,7 @@ test("headless capture observes initial chat, token changes, new chat and BGM wi
     assert.ok(data.events.some((e) => e.type === 3));
     assert.ok(data.audio.some((a) => a.paused === false));
     assert.equal(data.audio.at(-1)!.paused, true);
+    assert.equal(data.audio.length, 2);
     assert.ok(trimIdleEdges(data, 0).trim!.activityCount >= 3);
     assert.ok(
       records.some((r) => r.kind === "asset" && r.url.endsWith("test.wav")),

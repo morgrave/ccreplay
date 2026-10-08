@@ -40,6 +40,7 @@ export function captureData(
       .map((r) => String(r.text)),
     captureMode: meta?.captureMode || "room-state",
     adapter: !!meta?.adapter,
+    audioSource: meta?.audioSource,
   };
   if (!data.audio.length && data.frames.some((f) => f.bgm?.some((b) => b.url)))
     data.warnings!.push(
@@ -59,6 +60,7 @@ export function allowedAssetURL(value: string): boolean {
         u.hostname.endsWith(".ccfolia.com") ||
         [
           "storage.ccfolia-cdn.net",
+          "sound-master-assets.ccfolia-cdn.net",
           "firebasestorage.googleapis.com",
           "storage.googleapis.com",
           "fonts.googleapis.com",

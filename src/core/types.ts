@@ -43,6 +43,7 @@ export interface RecordingData {
   sampleKind?: string;
   assetStorage?: string;
   adapter?: boolean;
+  audioSource?: "room-state-v1";
   trim?: import("./trim.ts").TrimInfo;
 }
 export interface Token {
