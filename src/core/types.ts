@@ -42,6 +42,7 @@ export interface RecordingData {
   sampleKind?: string;
   assetStorage?: string;
   adapter?: boolean;
+  trim?: import("./trim.ts").TrimInfo;
 }
 export interface Token {
   id: string;

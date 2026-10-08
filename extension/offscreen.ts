@@ -1,7 +1,8 @@
+import { captureData, allowedAssetURL } from "../src/core/capture.ts";
 import { errorMessage } from "../src/core/errors.ts";
 import { isScriptResource } from "../src/core/resource-policy.ts";
 import type { RecorderState } from "./types.ts";
-import type { ExternalRecord, Asset } from "../src/core/types.ts";
+import type { ExternalRecord } from "../src/core/types.ts";
 import type { Zippable } from "fflate";
 import { zipSync, strToU8 } from "fflate";
 import { collectCSS } from "../src/core/css.ts";
@@ -49,26 +50,6 @@ const restored = tx("meta", (s) => s.get("state"), "readonly").then((s) => {
 function persist() {
   return tx("meta", (s) => s.put(state, "state"));
 }
-function allowedURL(value: string) {
-  try {
-    const u = new URL(value);
-    return (
-      u.protocol === "https:" &&
-      (u.hostname === "ccfolia.com" ||
-        u.hostname.endsWith(".ccfolia.com") ||
-        [
-          "storage.ccfolia-cdn.net",
-          "firebasestorage.googleapis.com",
-          "storage.googleapis.com",
-          "fonts.googleapis.com",
-          "fonts.gstatic.com",
-        ].includes(u.hostname) ||
-        u.hostname.endsWith(".firebasestorage.app"))
-    );
-  } catch {
-    return false;
-  }
-}
 function fetchAsset(url: string, resourceType?: string) {
   if (isScriptResource(url)) return;
   if (seen.has(url)) return;
@@ -83,7 +64,8 @@ function pump() {
     let job!: Promise<void>;
     job = (async () => {
       try {
-        if (!allowedURL(url)) throw Error("허용된 자산 호스트가 아닙니다.");
+        if (!allowedAssetURL(url))
+          throw Error("허용된 자산 호스트가 아닙니다.");
         const r = await fetch(url, {
           credentials: "omit",
           signal: AbortSignal.timeout(30000),
@@ -219,32 +201,15 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
       const batches = await tx("records", (s) => s.getAll(), "readonly");
       const saved = await tx("assets", (s) => s.getAll(), "readonly");
       const records: ExternalRecord[] = batches.flat();
-      const data = {
-        format: "ccreplay",
-        version: 1,
-        title:
-          records.find((r) => r.kind === "frame")?.room?.name ||
-          "코코포리아 세션",
+      const data = captureData(records, {
         startedAt: state.recordingStartedAt || state.startedAt || Date.now(),
-        duration: records.reduce(
-          (max, r) => Math.max(max, r.t || 0),
-          state.duration || 0,
-        ),
-        frames: records.filter((r) => r.kind === "frame"),
-        messages: records.filter((r) => r.kind === "message"),
-        audio: records.filter((r) => r.kind === "audio"),
-        events: records.filter((r) => r.kind === "event").map((r) => r.event),
-        assets: [] as Asset[],
-        warnings: records
-          .filter((r) => r.kind === "warning")
-          .map((r) => r.text),
-        captureMode: state.captureMode || "room-state",
-        adapter: state.adapter,
-      };
+        duration: state.duration,
+        roomUrl: state.roomUrl,
+      });
       const files: Zippable = {};
       for (const [i, a] of saved.entries()) {
         if (a.error) {
-          data.warnings.push(`자산 저장 실패: ${a.url} (${a.error})`);
+          data.warnings!.push(`자산 저장 실패: ${a.url} (${a.error})`);
           continue;
         }
         const path = "assets/" + i;
@@ -254,13 +219,6 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
           { level: 0 },
         ];
       }
-      if (
-        !data.audio.length &&
-        data.frames.some((f) => f.bgm?.some((b: ExternalRecord) => b.url))
-      )
-        data.warnings.push(
-          "BGM은 설정되어 있지만 실제 재생 위치를 발견하지 못했습니다. 방에서 음원을 재생한 후 기록해 주세요.",
-        );
       files["recording.json"] = strToU8(JSON.stringify(data));
       const blob = new Blob([new Uint8Array(zipSync(files, { level: 6 }))], {
         type: "application/zip",
@@ -270,7 +228,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
       const url = URL.createObjectURL(blob);
       const filename =
         "CCReplay-" +
-        new Date(data.startedAt).toISOString().replace(/[:.]/g, "-") +
+        new Date(data.startedAt!).toISOString().replace(/[:.]/g, "-") +
         ".ccreplay";
       const result = await chrome.runtime.sendMessage({
         target: "download",
@@ -282,7 +240,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         throw Error(result.error);
       }
       downloadUrls.set(result.id, url);
-      state.detail = `파일 저장 대기 · 자산 ${data.assets.length}개 · 주의 ${data.warnings.length}건`;
+      state.detail = `파일 저장 대기 · 자산 ${data.assets.length}개 · 주의 ${data.warnings!.length}건`;
       await persist();
       return { ok: true };
     }

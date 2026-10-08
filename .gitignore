@@ -36,6 +36,7 @@ yarn-error.log*
 /.codex/
 /outputs/
 /work/
+/recordings/
 /.openai/
 /ccreplay-github-pages.zip
 

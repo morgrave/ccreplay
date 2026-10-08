@@ -22,6 +22,8 @@ declare global {
   interface Window {
     __ccReplayBridge?: boolean;
     __ccReplayRecorder?: boolean;
+    /** The headless host persists these batches before acknowledging a stop. */
+    __ccReplaySink?: (batch: ExternalRecord[]) => void;
   }
   interface WindowEventMap {
     "ccreplay-start": CustomEvent<{ channel: string }>;
