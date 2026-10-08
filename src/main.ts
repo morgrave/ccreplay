@@ -366,14 +366,6 @@ async function load(recording: Recording, show = true) {
     }
   });
   $("#seek").max = String(d.duration);
-  $("#event-marks").innerHTML = d.messages
-    .filter((m) => m.t > 0)
-    .slice(0, 3000)
-    .map(
-      (m) =>
-        `<span style="left:${(100 * m.t) / Math.max(1, d.duration)}%"></span>`,
-    )
-    .join("");
   ($("#play") as HTMLButtonElement).disabled = d.duration === 0;
   if (d.events.length >= 2) {
     try {

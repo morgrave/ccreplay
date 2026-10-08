@@ -378,17 +378,6 @@ svg {
   border: 0;
   border-radius: 50%;
 }
-#event-marks {
-  position: absolute;
-  inset: 5px 6px;
-  pointer-events: none;
-}
-#event-marks span {
-  position: absolute;
-  height: 5px;
-  width: 1px;
-  background: #ffffff60;
-}
 .transport {
   height: 48px;
   display: flex;
