@@ -28,6 +28,7 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:recorder
+      - run: npx tsx --test tests/integration/chat.test.ts
       - run: npm run library:check
       - run: npm run build
         env:

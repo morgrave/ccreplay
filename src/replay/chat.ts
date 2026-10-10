@@ -42,10 +42,17 @@ export class RoomChat {
     );
     const drawer = original?.closest<HTMLElement>(".MuiDrawer-paper");
     if (!original || !drawer) return;
-    if (!this.row)
-      this.row = original
-        .querySelector<HTMLElement>(".MuiListItem-root")
-        ?.cloneNode(true) as HTMLElement | null;
+    if (!this.row?.querySelector(".MuiAvatar-root")) {
+      const rows = [
+        ...original.querySelectorAll<HTMLElement>(".MuiListItem-root"),
+      ];
+      const template =
+        rows.find((row) => row.querySelector(".MuiAvatar-root")) || rows[0];
+      if (template) {
+        this.row = template.cloneNode(true) as HTMLElement;
+        this.rendered = "";
+      }
+    }
     let live = doc.querySelector<HTMLElement>("[data-replay-chat]");
     if (!live) {
       live = original.cloneNode(false) as HTMLElement;
@@ -184,7 +191,7 @@ export class RoomChat {
     }
     const heading = row.querySelector<HTMLElement>("h6"),
       text = row.querySelector<HTMLElement>(".MuiListItemText-secondary"),
-      avatar = row.querySelector<HTMLImageElement>(".MuiAvatar-img");
+      avatarRoot = row.querySelector<HTMLElement>(".MuiAvatar-root");
     if (heading) {
       const date = heading
         .querySelector("span")
@@ -201,10 +208,21 @@ export class RoomChat {
       }
     }
     if (text) text.textContent = message.text;
-    if (avatar) {
-      const src = this.asset(message.iconUrl || "");
-      if (src) avatar.src = src;
-      else avatar.remove();
+    if (avatarRoot) {
+      const src = message.iconUrl ? this.asset(message.iconUrl) : "";
+      if (src) {
+        const avatar =
+          avatarRoot.querySelector<HTMLImageElement>(".MuiAvatar-img") ||
+          doc.createElement("img");
+        avatar.classList.add("MuiAvatar-img");
+        avatar.alt = "avatar";
+        avatar.draggable = false;
+        avatar.src = src;
+        avatar.style.cssText =
+          "width:100%;height:100%;object-fit:cover;object-position:top";
+        avatarRoot.classList.remove("MuiAvatar-colorDefault");
+        avatarRoot.replaceChildren(avatar);
+      } else avatarRoot.parentElement?.replaceChildren();
     }
     for (const action of row.querySelectorAll("button")) action.remove();
     const wrapper = doc.createElement("li");
