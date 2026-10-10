@@ -128,10 +128,16 @@ test("checkpoint rebuilds restore cached chat, selected tabs, collapse state and
     await page.evaluate(bundle.outputFiles[0].text);
     const room = page.frameLocator("#room");
     for (const mode of ["checkpoint", "drawer"] as const) {
-      await page.evaluate(() => {
+      await page.evaluate(async () => {
         const doc = document.querySelector("iframe")!.contentDocument!;
         (window as any).chat.sync(doc, 1000);
         const live = doc.querySelector<HTMLElement>("[data-replay-chat]")!;
+        // Measure the target region before remembering a pixel offset; an
+        // estimated offscreen row legitimately changes height when revealed.
+        live.firstElementChild!.scrollIntoView();
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        );
         live.scrollTop = 42;
         live.dispatchEvent(new Event("scroll"));
       });
@@ -199,6 +205,32 @@ test("checkpoint rebuilds restore cached chat, selected tabs, collapse state and
         `${mode} rebuild should reattach the cached portrait to the new log`,
       );
     }
+    await room
+      .getByRole("button", { name: "チャットウィンドウをとじる" })
+      .click();
+    await page.evaluate((html) => {
+      const doc = document.querySelector("iframe")!.contentDocument!;
+      doc.close();
+      doc.open();
+      doc.write(html);
+      doc.close();
+      (window as any).chat.sync(doc, 0);
+      // Browsers can enqueue a scroll-to-zero notification when a drawer is
+      // hidden. It must not replace the remembered visible scroll position.
+      doc
+        .querySelector("[data-replay-chat]")!
+        .dispatchEvent(new Event("scroll"));
+    }, html);
+    await room
+      .getByRole("button", { name: "チャットウィンドウを開く" })
+      .click();
+    assert.equal(
+      await room
+        .locator("[data-replay-chat]")
+        .evaluate((element) => element.scrollTop),
+      42,
+      "opening a drawer rebuilt while hidden restores the last visible position",
+    );
   } finally {
     await browser.close();
   }
@@ -243,6 +275,24 @@ test("large chat histories remain fully scrollable with variable row heights", a
       const viewport = await log.boundingBox();
       assert(viewport);
       assert(bounds.y >= viewport.y && bounds.y < viewport.y + viewport.height);
+      await page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          ),
+      );
+      const settled = await row.locator(".MuiAvatar-img").boundingBox();
+      assert(settled);
+      assert(
+        Math.abs(settled.y - bounds.y) <= 1,
+        "the visible message stays anchored as offscreen row heights settle",
+      );
+      assert.equal(
+        await log.evaluate(
+          (element) => getComputedStyle(element).overflowAnchor,
+        ),
+        "auto",
+      );
     }
     await log.evaluate((element) => {
       element.scrollTop = element.scrollHeight;

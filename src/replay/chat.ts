@@ -89,6 +89,8 @@ export class RoomChat {
   private row: HTMLElement | null = null;
   private rendered: ChatMessage[] | null = null;
   private live: HTMLElement | null = null;
+  private pendingScroll: number | null = null;
+  private scrollRevision = 0;
   private rowDocument: Document | null = null;
   private rowCache = new WeakMap<ChatMessage, HTMLElement>();
   private timeline: ChatTimeline;
@@ -201,6 +203,10 @@ export class RoomChat {
       live.dataset.replayRevision !== String(this.revision) ||
       live.childElementCount !== Math.max(1, rows.length)
     ) {
+      // Avoid anchoring to a row that is about to be replaced or moved. Restore
+      // native anchoring after the new layout, so normal history scrolling can
+      // still account for content-visibility's estimated offscreen heights.
+      live.style.overflowAnchor = "none";
       const atBottom =
         live.scrollHeight - live.scrollTop - live.clientHeight < 40;
       if (this.rowDocument !== doc) {
@@ -235,17 +241,38 @@ export class RoomChat {
       this.rendered = rows;
       this.live = live;
       live.dataset.replayRevision = String(++this.revision);
-      live.scrollTop =
-        this.scroll.get(this.selected) ?? (atBottom ? live.scrollHeight : 0);
+      this.pendingScroll =
+        this.scroll.get(this.selected) ?? (atBottom ? Infinity : 0);
+    }
+    // A hidden drawer has no scroll range; postpone restoring until it opens.
+    if (
+      this.pendingScroll !== null &&
+      !this.collapsed &&
+      live.clientHeight > 0
+    ) {
+      live.style.overflowAnchor = "none";
+      live.scrollTop = Number.isFinite(this.pendingScroll)
+        ? this.pendingScroll
+        : live.scrollHeight;
+      this.pendingScroll = null;
+      const revision = ++this.scrollRevision;
+      const restored = live;
+      const view = doc.defaultView;
+      if (view)
+        view.requestAnimationFrame(() =>
+          view.requestAnimationFrame(() => {
+            if (this.scrollRevision === revision && this.live === restored)
+              restored.style.overflowAnchor = "";
+          }),
+        );
+      else live.style.overflowAnchor = "";
     }
     if (this.bound.has(doc.documentElement)) return;
     this.bound.add(doc.documentElement);
     doc.addEventListener(
       "scroll",
       (event) => {
-        const element = event.target as HTMLElement;
-        if (element?.hasAttribute?.("data-replay-chat"))
-          this.scroll.set(this.selected, element.scrollTop);
+        this.rememberScroll(event.target as HTMLElement);
       },
       true,
     );
@@ -255,6 +282,7 @@ export class RoomChat {
       const channel = button.dataset.replayChannel;
       if (channel) {
         event.preventDefault();
+        this.rememberScroll(this.live);
         this.selected = channel;
         this.rendered = null;
         this.refresh();
@@ -266,10 +294,25 @@ export class RoomChat {
         label === "チャットウィンドウをとじる"
       ) {
         event.preventDefault();
+        this.rememberScroll(this.live);
         this.collapsed = label === "チャットウィンドウをとじる";
+        if (!this.collapsed)
+          this.pendingScroll =
+            this.scroll.get(this.selected) ?? this.pendingScroll;
         this.refresh();
       }
     });
+  }
+
+  private rememberScroll(element: HTMLElement | null): void {
+    if (
+      !this.collapsed &&
+      element === this.live &&
+      element?.isConnected &&
+      element.clientHeight > 0 &&
+      element.dataset.replayChannel
+    )
+      this.scroll.set(element.dataset.replayChannel, element.scrollTop);
   }
 
   private messageRow(doc: Document, message: ChatMessage): HTMLElement {
