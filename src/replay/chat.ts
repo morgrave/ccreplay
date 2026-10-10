@@ -20,20 +20,93 @@ export function channelMessages(
   return [...latest.values()].filter((message) => message.channel === channel);
 }
 
+interface MessageState {
+  message: ChatMessage;
+  /** Map insertion order, including a fresh position after a deletion. */
+  order: number;
+}
+
+/** Reuse channel snapshots until one of their message events is crossed. */
+export class ChatTimeline {
+  private cursor = 0;
+  private state = new Map<string, MessageState>();
+  private channels = new Map<string, ChatMessage[]>();
+  private changes: {
+    before: MessageState | undefined;
+    after: MessageState | undefined;
+  }[];
+
+  constructor(private events: ChatMessage[]) {
+    const state = new Map<string, MessageState>();
+    this.changes = events.map((message, index) => {
+      const before = state.get(message.id);
+      const after = message.removed
+        ? undefined
+        : { message, order: before?.order ?? index };
+      if (after) state.set(message.id, after);
+      else state.delete(message.id);
+      return { before, after };
+    });
+  }
+
+  at(time: number, channel: string): ChatMessage[] {
+    let low = 0;
+    let high = this.events.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (this.events[middle].t <= time) low = middle + 1;
+      else high = middle;
+    }
+    while (this.cursor < low) this.apply(this.cursor++, false);
+    while (this.cursor > low) this.apply(--this.cursor, true);
+    let rows = this.channels.get(channel);
+    if (!rows) {
+      rows = [...this.state.values()]
+        .filter((entry) => entry.message.channel === channel)
+        .sort((a, b) => a.order - b.order)
+        .map((entry) => entry.message);
+      this.channels.set(channel, rows);
+    }
+    return rows;
+  }
+
+  private apply(index: number, reverse: boolean): void {
+    const { before, after } = this.changes[index];
+    if (before) this.channels.delete(before.message.channel);
+    if (after) this.channels.delete(after.message.channel);
+    const value = reverse ? before : after;
+    const id = this.events[index].id;
+    if (value) this.state.set(id, value);
+    else this.state.delete(id);
+  }
+}
+
 /** Connect the existing CCfolia drawer and tabs to the recorded message state. */
 export class RoomChat {
   private selected = "main";
   private collapsed = false;
   private scroll = new Map<string, number>();
   private row: HTMLElement | null = null;
-  private rendered = "";
+  private rendered: ChatMessage[] | null = null;
+  private live: HTMLElement | null = null;
+  private rowDocument: Document | null = null;
+  private rowCache = new WeakMap<ChatMessage, HTMLElement>();
+  private timeline: ChatTimeline;
+  private names = new Map(
+    Object.entries(channelLabels).map(([id, label]) => [label, id]),
+  );
   private revision = 0;
   private bound = new WeakSet<HTMLElement>();
   private refresh: () => void = () => {};
   constructor(
-    private messages: ChatMessage[],
+    messages: ChatMessage[],
     private asset: (url: string) => string,
-  ) {}
+  ) {
+    this.timeline = new ChatTimeline(messages);
+    for (const message of messages)
+      if (!channelLabels[message.channel])
+        this.names.set(message.channelName || message.channel, message.channel);
+  }
 
   sync(doc: Document, time: number): void {
     this.refresh = () => this.sync(doc, time);
@@ -48,9 +121,13 @@ export class RoomChat {
       ];
       const template =
         rows.find((row) => row.querySelector(".MuiAvatar-root")) || rows[0];
-      if (template) {
+      if (
+        template &&
+        (!this.row || template.querySelector(".MuiAvatar-root"))
+      ) {
         this.row = template.cloneNode(true) as HTMLElement;
-        this.rendered = "";
+        this.rendered = null;
+        this.rowCache = new WeakMap();
       }
     }
     let live = doc.querySelector<HTMLElement>("[data-replay-chat]");
@@ -59,7 +136,7 @@ export class RoomChat {
       live.dataset.replayChat = "";
       live.removeAttribute("id");
       original.after(live);
-      this.rendered = "";
+      this.rendered = null;
     }
     original.style.setProperty("display", "none", "important");
     drawer.style.setProperty(
@@ -94,18 +171,12 @@ export class RoomChat {
       );
     }
 
-    const names = new Map(
-      Object.entries(channelLabels).map(([id, label]) => [label, id]),
-    );
-    for (const message of this.messages)
-      if (!channelLabels[message.channel])
-        names.set(message.channelName || message.channel, message.channel);
     for (const button of drawer.querySelectorAll<HTMLButtonElement>(
       '[role="tablist"] button',
     )) {
       if (button.disabled) continue;
       const label = (button.textContent || "").replace(/\s*\d+\s*$/, "").trim();
-      const channel = names.get(label) || label;
+      const channel = this.names.get(label) || label;
       if (!channel) continue;
       button.dataset.replayChannel = channel;
       button.role = "tab";
@@ -121,29 +192,48 @@ export class RoomChat {
         }
       }
     }
-    const rows = channelMessages(this.messages, time, this.selected);
+    const rows = this.timeline.at(time, this.selected);
     live.dataset.replayTime = String(time);
     live.dataset.replayChannel = this.selected;
-    const signature = JSON.stringify([this.selected, rows]);
     if (
-      signature !== this.rendered ||
+      rows !== this.rendered ||
+      live !== this.live ||
       live.dataset.replayRevision !== String(this.revision) ||
       live.childElementCount !== Math.max(1, rows.length)
     ) {
       const atBottom =
         live.scrollHeight - live.scrollTop - live.clientHeight < 40;
-      const fragment = doc.createDocumentFragment();
-      for (const message of rows)
-        fragment.append(this.messageRow(doc, message));
-      if (!rows.length) {
+      if (this.rowDocument !== doc) {
+        this.rowDocument = doc;
+        this.rowCache = new WeakMap();
+      }
+      if (rows.length) {
+        // Keep existing rows mounted. Appending a message or editing one should
+        // not clone thousands of portraits and trigger their layout again.
+        let next = live.firstElementChild;
+        for (const message of rows) {
+          let row = this.rowCache.get(message);
+          if (!row) {
+            row = this.messageRow(doc, message);
+            this.rowCache.set(message, row);
+          }
+          if (row === next) next = next.nextElementSibling;
+          else live.insertBefore(row, next);
+        }
+        while (next) {
+          const remove = next;
+          next = next.nextElementSibling;
+          remove.remove();
+        }
+      } else {
         const empty = doc.createElement("li");
         empty.textContent = "이 시점까지 기록된 메시지가 없습니다.";
         empty.style.cssText =
           "padding:16px;list-style:none;font-size:14px;color:#bdbdbd";
-        fragment.append(empty);
+        live.replaceChildren(empty);
       }
-      live.replaceChildren(fragment);
-      this.rendered = signature;
+      this.rendered = rows;
+      this.live = live;
       live.dataset.replayRevision = String(++this.revision);
       live.scrollTop =
         this.scroll.get(this.selected) ?? (atBottom ? live.scrollHeight : 0);
@@ -166,7 +256,7 @@ export class RoomChat {
       if (channel) {
         event.preventDefault();
         this.selected = channel;
-        this.rendered = "";
+        this.rendered = null;
         this.refresh();
         return;
       }
@@ -226,7 +316,10 @@ export class RoomChat {
     }
     for (const action of row.querySelectorAll("button")) action.remove();
     const wrapper = doc.createElement("li");
-    wrapper.style.listStyle = "none";
+    // Keep the complete history scrollable without laying out every offscreen
+    // portrait and text block after a seek. Browsers remember measured heights.
+    wrapper.style.cssText =
+      "list-style:none;content-visibility:auto;contain-intrinsic-size:auto 100px";
     wrapper.append(row);
     const divider = doc.createElement("hr");
     divider.className = "MuiDivider-root MuiDivider-middle MuiDivider-light";

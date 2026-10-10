@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { channelMessages } from "../src/replay/chat.ts";
+import { channelMessages, ChatTimeline } from "../src/replay/chat.ts";
 import { tokenTooltipStyle } from "../src/replay/tooltip.ts";
 import { normalizeInitialMessages } from "../src/core/model.ts";
 import { fixtureRecording } from "./fixtures/recording.ts";
@@ -16,6 +16,43 @@ test("channel selection respects time, edits and deletion without leaking other 
   assert.equal(channelMessages(messages, 15, "other").length, 1);
   assert.equal(channelMessages(messages, 20, "other").length, 0);
   assert.equal(channelMessages(messages, 20, "info").length, 0);
+});
+
+test("indexed chat seeks preserve edits, moves, deletion and reinserted order", () => {
+  const messages = [
+    { id: "a", t: 0, channel: "main", text: "first" },
+    { id: "b", t: 0, channel: "main", text: "second" },
+    { id: "c", t: 0, channel: "other", text: "chat" },
+    { id: "a", t: 10, channel: "main", text: "edited" },
+    { id: "b", t: 20, channel: "main", removed: true },
+    { id: "a", t: 30, channel: "other", text: "moved" },
+    { id: "d", t: 40, channel: "main", text: "fourth" },
+    { id: "b", t: 50, channel: "main", text: "returned" },
+  ].map((message) => ({ name: "speaker", text: "", ...message }));
+  const timeline = new ChatTimeline(messages);
+  for (const time of [50, 0, 35, 15, 25, 50, -1, 0, 60, 10]) {
+    for (const channel of ["main", "other", "info"])
+      assert.deepEqual(
+        timeline.at(time, channel),
+        channelMessages(messages, time, channel),
+      );
+  }
+});
+
+test("chat snapshots are reused between events and across unrelated channel changes", () => {
+  const timeline = new ChatTimeline([
+    { id: "a", t: 0, channel: "main", name: "A", text: "first" },
+    { id: "b", t: 10, channel: "other", name: "B", text: "other" },
+    { id: "a", t: 20, channel: "main", name: "A", text: "edited" },
+  ]);
+  const initial = timeline.at(0, "main");
+  assert.equal(timeline.at(5, "main"), initial);
+  assert.equal(timeline.at(15, "main"), initial);
+  assert.equal(timeline.at(0, "main"), initial);
+  const edited = timeline.at(20, "main");
+  assert.notEqual(edited, initial);
+  assert.equal(edited[0].text, "edited");
+  assert.equal(timeline.at(30, "main"), edited);
 });
 
 test("legacy initial chat is visible at zero without moving new messages or later edits", () => {

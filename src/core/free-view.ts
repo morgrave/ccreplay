@@ -49,5 +49,6 @@ export function applyCamera(doc: Document, camera: Camera | null) {
     move.setAttribute("data-ccreplay-camera", "move");
     scale.setAttribute("data-ccreplay-camera", "scale");
   }
-  style.textContent = `[data-ccreplay-camera="move"]{transform:translate(${camera.x}px,${camera.y}px)!important}[data-ccreplay-camera="scale"]{transform:scale(${camera.scale})!important}[role="alert"],.MuiDialog-root,.MuiTooltip-popper{display:none!important}html,body,*{user-select:none!important;-webkit-user-select:none!important}`;
+  const css = `[data-ccreplay-camera="move"]{transform:translate(${camera.x}px,${camera.y}px)!important}[data-ccreplay-camera="scale"]{transform:scale(${camera.scale})!important}[role="alert"],.MuiDialog-root,.MuiTooltip-popper{display:none!important}html,body,*{user-select:none!important;-webkit-user-select:none!important}`;
+  if (style.textContent !== css) style.textContent = css;
 }

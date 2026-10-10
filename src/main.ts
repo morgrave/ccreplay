@@ -72,7 +72,7 @@ function dialog(title: string, html: string) {
 const stats = (t: Token) =>
   `<span class="token-stats">${(t.status || []).map((s) => `<span>${esc(s.label)}<b>${esc(s.value)}<small> / ${esc(s.max)}</small></b></span>`).join("")}</span>`;
 function renderInspector() {
-  if (!current) return;
+  if (!current || !$("#replay-page").classList.contains("inspect-open")) return;
   $("#search-wrap").hidden = tab !== "chat";
   $$("[data-tab]").forEach((b) => {
     b.classList.toggle("selected", b.dataset.tab === tab);
@@ -154,12 +154,13 @@ function syncOriginal(force = false) {
     if (playing) replayer.play(replayOffset());
     else replayer.pause(replayOffset());
   }
-  if (replayer) roomChat?.sync(replayer.iframe.contentDocument!, time);
+  if (force) queueFitReplay();
+  else if (replayer) roomChat?.sync(replayer.iframe.contentDocument!, time);
 }
 function pause() {
   playing = false;
   engine?.sync(time, false, speed, volume);
-  replayer?.pause(replayOffset());
+  replayer?.pause();
   renderTransport();
   buttonState();
 }
@@ -192,9 +193,17 @@ function setupRoomView() {
   $("#original").hidden = !replayer;
   $("#dom-replay").hidden = false;
   $("#replay-interaction").hidden = false;
-  syncOriginal(true);
-  fitReplay();
+  queueFitReplay();
   queueHits();
+}
+let fitPending = false;
+function queueFitReplay() {
+  if (fitPending) return;
+  fitPending = true;
+  requestAnimationFrame(() => {
+    fitPending = false;
+    fitReplay();
+  });
 }
 function fitReplay() {
   if (!replayer) return;
@@ -215,8 +224,9 @@ function fitReplay() {
             ),
           ),
       );
-    replayer.iframe.width = width;
-    replayer.iframe.height = height;
+    if (Number(replayer.iframe.width) !== width) replayer.iframe.width = width;
+    if (Number(replayer.iframe.height) !== height)
+      replayer.iframe.height = height;
   }
   const scale = Math.min(
     $("#stage").clientWidth / width,
@@ -230,7 +240,7 @@ function fitReplay() {
   if (freeCamera) applyCamera(replayer.iframe.contentDocument!, freeCamera);
   bindRoomControls(replayer.iframe.contentDocument!, {
     camera: () => freeCamera,
-    changed: fitReplay,
+    changed: queueFitReplay,
     leave: hideTokenTip,
     hover: (e) => {
       const r = replayer!.iframe.getBoundingClientRect(),
@@ -243,11 +253,6 @@ function fitReplay() {
     },
   });
   roomChat?.sync(replayer.iframe.contentDocument!, time);
-  const activePlayer = replayer;
-  requestAnimationFrame(() => {
-    if (activePlayer === replayer)
-      roomChat?.sync(activePlayer.iframe.contentDocument!, time);
-  });
   queueHits();
 }
 let hitsPending = false;
@@ -393,10 +398,9 @@ async function load(recording: Recording, show = true) {
         "flush",
       ])
         replayer.on(event, () => {
-          fitReplay();
+          queueFitReplay();
         });
-      replayer.pause(0);
-      fitReplay();
+      queueFitReplay();
     } catch {
       notify("방 복원에 실패했습니다. 기록 파일을 확인해 주세요.");
     }
@@ -686,7 +690,7 @@ document.addEventListener("drop", (e) => {
   openFile(e.dataTransfer?.files[0]);
 });
 new ResizeObserver(() => {
-  fitReplay();
+  queueFitReplay();
 }).observe($("#stage"));
 function tick(now: number) {
   if (playing && current) {
